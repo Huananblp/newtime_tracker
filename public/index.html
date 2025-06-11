@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://www.huana-nbp.go.th/index/add_file/P0D284NMon35557.png" type="image/png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+    <!-- ****** Auto Complete ********* -->
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-ui.autocomplete.scroll@0.1.9/jquery.ui.autocomplete.scroll.min.js"></script>
+
+    <title>ระบบลงเวลาออนไลน์ อบต.ข่าใหญ่</title>
+
+    <!-- ****** Style CSS ********* -->
+    <style>
+        input#employee {
+            width: 282px;
+            height: 60px;
+            background-color: brown;
+            color: yellow;
+            margin-block-start: 5px;
+            border-radius: 36px;
+            font-size: 20px;
+        }
+
+        div#showtxt {
+            font-size: 27px;
+            margin-top: 20px;
+        }
+
+        @font-face {
+            font-family: 'Digital dream Fat';
+            src: url('https://semicon.github.io/fonts/DigitaldreamFat.woff2') format('woff2'),
+                 url('https://semicon.github.io/fonts/DigitaldreamFat.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=K2D&family=Kanit&family=Sriracha&display=swap');
+
+        * {
+            margin: 0px;
+            padding: 0px;
+            box-sizing: border-box;
+            font-family: 'K2D', sans-serif;
+        }
+
+        body {
+            font-family: 'Kanit', sans-serif;
+            color: #444;
+            background-color: white;
+            padding: 20px;
+            border: 2px solid white;
+            box-shadow: 0px 8px 10px rgba(0, 0, 0, 0.5);
+            font-size: 1.05rem;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background-color: #92a8d1;
+            background: url("https://www.i-pic.info/i/BbiN536436.jpg") no-repeat center center fixed;
+            -webkit-background-size: cover;
+            -moz-background-size: cover;
+            -o-background-size: cover;
+            background-size: cover;
+        }
+
+        input#employee {
+            font-family: 'Kanit', sans-serif;
+            width: 282px;
+            height: 60px;
+            background-color: brown;
+            color: yellow;
+            margin-block-start: 5px;
+            border-radius: 36px;
+            font-size: 20px;
+        }
+
+        .site-logo {
+            content: url("https://www.huana-nbp.go.th/index/add_file/P0D284NMon35557.png");
+            display: inline-block;
+            margin-top: 20px;
+            width: auto;
+            height: 100px;
+        }
+
+        .msgBg {
+            background-color: transparent;
+        }
+
+        .wrapper {
+            background: rgba(221, 255, 255, 0.7);
+            width: 350px;
+            padding: 20px;
+            border: 1px solid #999;
+            border-radius: 5px;
+            box-shadow: 0px 15px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        /** #### digital clock #### **/
+        .clock {
+            font-family: Digital dream Fat;
+            font-size: 28px;
+            color: #00f6fa;
+            letter-spacing: 3px;
+            text-shadow: 1px 1px 2px teal, 0 0 25px green, 0 0 5px #00fbff;
+            min-width: 98%;
+            background: #444;
+            padding: 5px 0px 5px 10px;
+            display: inline-block;
+            border: 3px solid #ccc;
+            border-radius: 2px;
+            outline-style: solid;
+            outline-color: #999;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: 10px;
+        }
+
+        .status-online {
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .status-offline {
+            background-color: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .version-info {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 10px;
+            border-radius: 15px;
+        }
+    </style>
+</head>
+
+<!-- ******* Time Tracker HTML Body *********** -->
+<body>
+    <div class="wrapper text-center" style="max-width:350px">
+        <div class="site-logo text-center"></div>
+        <h5>ระบบลงเวลาออนไลน์ อบต.ข่าใหญ่</h5>
+        <small>
+            <span id="connection-status">🔄 กำลังเชื่อมต่อ...</span>
+            <span id="status-indicator" class="status-indicator"></span>
+        </small>
+
+        <span id="MyClockDisplay" class="clock mt-3" onload="showTime()"></span>
+
+        <form id="myForm">
+            <div class="row mt-4">
+                <div class="form-group col">
+                    <label for="employee">พิมพ์ชื่อหรือรหัส </label>
+                    <input id="employee" class="text-center"> <br>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="form-group col">
+                    <label for="lblinfo"><i class="fas fa-book-reader"></i> หมายเหตุ:ประชุม/กิจกรรม อื่นๆ</label>
+                    <input type="search" class="form-control form-control-lg" id="userinfo" name="userinfo" list="list">
+                    <datalist id="list">
+                        <option value="ไปราชการ">ไปราชการ</option>
+                        <option value="ลากิจ">ลากิจ</option>
+                        <option value="ลาป่วย">ลาป่วย</option>
+                        <option value="ลาคลอด">ลาคลอด</option>
+                    </datalist>
+                </div>
+            </div>
+
+            <div class="row mt-4 g-2">
+                <div class="col-6">
+                    <button id="clockin" type="button" class="btn btn-lg btn-primary w-100">Clock In</button>
+                </div>
+                <div class="col-6">
+                    <button id="clockout" type="button" class="btn btn-lg btn-warning w-100">Clock Out</button>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="form-group col">
+                    <div class="alert" role="alert" id="message"></div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Version info -->
+    <div class="version-info">
+        <span id="app-version">v2.0.0</span> | 
+        <span id="server-status">Render</span>
+    </div>
+
+    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+    <script>
+        // VConsole สำหรับ debug (เปิดเฉพาะ development)
+        // var vConsole = new window.VConsole();
+    </script>
+
+    <!-- ******* Javascript *********** -->
+    <script>
+        // ===== Configuration =====
+        // ตรวจสอบว่าอยู่ใน production หรือ development
+        var isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        var apiUrl = isProduction ? 
+            window.location.origin + '/api' : 
+            'http://localhost:3000/api';
+        
+        var owner = 'องค์การบริหารส่วนตำบลข่าใหญ่';
+        var connectionRetryCount = 0;
+        var maxRetries = 3;
+
+        console.log('🌐 API URL:', apiUrl);
+        console.log('🏢 Environment:', isProduction ? 'Production' : 'Development');
+
+        /** ******* โหลดข้อมูลพนังงานมาแสดงในแถบเลือกรายการ ******* **/
+        var profile, gps;
+
+        // ตรวจสอบการเชื่อมต่อกับ server
+        async function checkServerConnection() {
+            try {
+                const response = await fetch(apiUrl + '/health');
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'healthy') {
+                    updateConnectionStatus('🟢 เชื่อมต่อแล้ว', 'online');
+                    connectionRetryCount = 0;
+                    return true;
+                } else {
+                    throw new Error('Server unhealthy');
+                }
+            } catch (error) {
+                console.error('❌ Connection check failed:', error);
+                updateConnectionStatus('🔴 ไม่สามารถเชื่อมต่อได้', 'offline');
+                
+                // ลองเชื่อมต่อใหม่
+                if (connectionRetryCount < maxRetries) {
+                    connectionRetryCount++;
+                    setTimeout(checkServerConnection, 5000);
+                    updateConnectionStatus(`🔄 กำลังลองใหม่... (${connectionRetryCount}/${maxRetries})`, 'offline');
+                }
+                
+                return false;
+            }
+        }
+
+        function updateConnectionStatus(message, status) {
+            document.getElementById('connection-status').textContent = message;
+            const indicator = document.getElementById('status-indicator');
+            indicator.className = `status-indicator status-${status}`;
+        }
+
+        $.when(getlocation()).done(function (res) {
+            console.log('📍 Location obtained:', gps);
+        });
+
+        $(document).ready(function () {
+            let profile = null;
+
+            // ตรวจสอบการเชื่อมต่อก่อน
+            checkServerConnection();
+
+            $('#clockin').click(() => ClockIn());
+            $('#clockout').click(() => ClockOut());
+
+            // เช็คว่ามี LIFF ไหม (สำหรับ LINE)
+            if (typeof liff !== 'undefined') {
+                liff.init({
+                    liffId: '2000498666-QpjPNOd6',
+                    withLoginOnExternalBrowser: true
+                });
+
+                liff.ready.then(() => {
+                    profile = liff.getDecodedIDToken();
+
+                    if (profile) {
+                        console.log("🚀 LINE Profile loaded:", profile.name);
+                    } else {
+                        console.log("⚠️ No LINE profile available");
+                    }
+
+                    initApp();
+                });
+            } else {
+                console.log("⚠️ LIFF not available, using fallback");
+                profile = {
+                    name: 'ผู้ใช้งาน',
+                    picture: ''
+                };
+                initApp();
+            }
+
+            function initApp() {
+                document.getElementById('message').innerText = owner;
+                document.getElementById('message').className = 'alert msgBg';
+                
+                loadEmployees();
+            }
+        });
+
+        async function loadEmployees() {
+            try {
+                const response = await fetch(apiUrl + '/employees', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({})
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    var dataPerson = data.data;
+                    console.log('👥 Employees loaded:', dataPerson.length);
+                    
+                    $(function () {
+                        $("#employee").autocomplete({
+                            maxShowItems: 3,
+                            source: dataPerson
+                        });
+                    });
+                } else {
+                    throw new Error(data.error || 'Failed to load employees');
+                }
+
+            } catch (error) {
+                console.error('❌ Failed to load employees:', error);
+                $('#message').html('⚠️ ไม่สามารถโหลดรายชื่อพนักงานได้');
+                document.getElementById("message").className = "alert alert-warning";
+            }
+        }
+
+        /** ******* Clock In *********** **/
+        async function ClockIn() {
+            event.preventDefault();
+            
+            var employee = document.getElementById("employee").value;
+            var userinfo = document.getElementById("userinfo").value;
+
+            if (employee != '') {
+                $('#message').html("<span class='spinner-border spinner-border-sm text-primary'></span> โปรดรอสักครู่ ...!");
+                
+                try {
+                    // ดึงข้อมูลโปรไฟล์ล่าสุด
+                    if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
+                        profile = liff.getDecodedIDToken();
+                    }
+
+                    const response = await fetch(apiUrl + '/clockin', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            employee,
+                            userinfo,
+                            lat: gps[0],
+                            lon: gps[1],
+                            line_name: profile ? profile.name : 'ผู้ใช้งาน',
+                            line_picture: profile ? profile.picture : ''
+                        })
+                    });
+
+                    const result = await response.json();
+                    console.log('⏰ Clock In result:', result);
+                    
+                    if (result.success) {
+                        setTimeout(() => {
+                            var message = result.employee + '<br> บันทึกเวลามา ' + result.time;
+                            $('#message').html(message);
+                            document.getElementById("message").className = "alert alert-primary";
+                            clearForm();
+                        }, 500);
+                    } else {
+                        var message = result.employee + ' ' + result.message;
+                        $('#message').html(message);
+                        document.getElementById("message").className = "alert alert-warning";
+                        clearForm();
+                    }
+
+                } catch (error) {
+                    console.error('❌ Clock in error:', error);
+                    $('#message').html('⚠️ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+                    document.getElementById("message").className = "alert alert-danger";
+                    clearForm();
+                }
+            } else {
+                $('#message').html('⚠️ กรุณาเลือกรายชื่อพนักงาน ...!');
+                document.getElementById('message').className = 'alert alert-warning text-danger';
+                clearForm();
+            }
+        }
+
+        /** ******* Clock Out *********** **/
+        async function ClockOut() {
+            event.preventDefault();
+            
+            var employee = document.getElementById("employee").value;
+
+            if (employee != '') {
+                $('#message').html("<span class='spinner-border spinner-border-sm text-warning'></span> โปรดรอสักครู่ ...!");
+                
+                try {
+                    // ดึงข้อมูลโปรไฟล์ล่าสุด
+                    if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
+                        profile = liff.getDecodedIDToken();
+                    }
+
+                    const response = await fetch(apiUrl + '/clockout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            employee,
+                            lat: gps[0],
+                            lon: gps[1],
+                            line_name: profile ? profile.name : 'ผู้ใช้งาน',
+                            line_picture: profile ? profile.picture : ''
+                        })
+                    });
+
+                    const result = await response.json();
+                    console.log('⏰ Clock Out result:', result);
+                    
+                    if (result.success) {
+                        setTimeout(() => {
+                            var message = result.employee + '<br> บันทึกเวลากลับ ' + result.time;
+                            if (result.hours) {
+                                message += '<br>ทำงานรวม ' + result.hours + ' ชั่วโมง';
+                            }
+                            $('#message').html(message);
+                            document.getElementById("message").className = "alert alert-primary";
+                            clearForm();
+                        }, 500);
+                    } else {
+                        var message = result.employee + ' ' + result.message;
+                        $('#message').html(message);
+                        document.getElementById("message").className = "alert alert-warning";
+                        clearForm();
+                    }
+
+                } catch (error) {
+                    console.error('❌ Clock out error:', error);
+                    $('#message').html('⚠️ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+                    document.getElementById("message").className = "alert alert-danger";
+                    clearForm();
+                }
+            } else {
+                $('#message').html("⚠️ กรุณาเลือกรายชื่อพนักงาน ...!");
+                document.getElementById("message").className = "alert alert-warning text-danger";
+                clearForm();
+            }
+        }
+
+        /** ********* ตำแหน่งทางภูมิศาสตร์ - ละติจูด/ลองจิจูด ******** **/
+        function getlocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(showPosition, getLocationFromApi);
+            } else {
+                console.log("❌ Geolocation is not supported by this browser.");
+                getLocationFromApi();
+            }
+        }
+
+        function showPosition(position) {
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+            gps = [lat, lon];
+            console.log("📍 GPS Location:", gps);
+        }
+
+        function getLocationFromParameter() {
+            var url = new URL(window.location.href);
+            var lat = url.searchParams.get("lat");
+            var lon = url.searchParams.get("lon");
+            if (lat && lon) {
+                gps = [lat, lon];
+                console.log("📍 URL Parameters Location:", gps);
+            }
+        }
+
+        function getLocationFromApi() {
+            $.getJSON('https://ipapi.co/json/', function (data) {
+                var lat = data.latitude;
+                var lon = data.longitude;
+                gps = [lat, lon];
+                console.log("📍 IP-based Location:", gps);
+                return gps;
+            }).fail(function() {
+                // Fallback location (อบต.ข่าใหญ่)
+                gps = [14.0583, 100.6014];
+                console.log("📍 Fallback Location:", gps);
+            });
+        }
+
+        /** ******* ล้างแบบฟอร์มหลังจากส่งข้อมูล ******** **/
+        function clearForm() {
+            setTimeout(function () {
+                document.getElementById('message').innerText = owner;
+                document.getElementById("message").className = "alert msgBg";
+                document.getElementById("myForm").reset();
+            }, 5000);
+        }
+
+        /** จาวาสคริปต์ นาฬิกาดิจิตอล **/
+        function showTime() {
+            var date = new Date();
+            var h = date.getHours();
+            var m = date.getMinutes();
+            var s = date.getSeconds();
+            var dot = document.textContent = '.';
+
+            if (s % 2 == 1) {
+                dot = document.textContent = '.';
+            } else {
+                dot = document.textContent = '\xa0';
+            }
+
+            h = h < 10 ? "0" + h : h;
+            m = m < 10 ? "0" + m : m;
+            s = s < 10 ? "0" + s : s;
+
+            var time = h + ":" + m + ":" + s + '' + dot;
+            document.getElementById("MyClockDisplay").innerText = time;
+            document.getElementById("MyClockDisplay").textContent = time;
+
+            setTimeout(showTime, 1000);
+        }
+
+        // เริ่มต้นการทำงาน
+        showTime();
+        
+        // ตรวจสอบการเชื่อมต่อทุก 30 วินาที
+        setInterval(checkServerConnection, 30000);
+    </script>
+    
+    <!-- LIFF SDK (สำหรับ LINE) -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</body>
+</html>
