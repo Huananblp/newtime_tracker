@@ -1,695 +1,911 @@
-<!--  *********** Time Tracker V.11 - ข่าใหญ่ *****************  -->
-<!--  ******* Ref. https://codewithcurt.com/create-employee-time-clock-web-app-on-google-sheets/ ****  -->
-
+<!DOCTYPE html>
 <html lang="th">
-
 <head>
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <link rel="icon" href="https://www.huana-nbp.go.th/index/add_file/qOv0r0dTue83729.png" type="image/png">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-
-  <!-- ****** Auto Complete ********* -->
-  <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
-  <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
-  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
-  <script
-    src="https://cdn.jsdelivr.net/npm/jquery-ui.autocomplete.scroll@0.1.9/jquery.ui.autocomplete.scroll.min.js"></script>
-
-  <!-- ****** Style CSS ********* -->
-  <style>
-    input#employee {
-      width: 282px;
-      height: 60px;
-      background-color: brown;
-      color: yellow;
-      margin-block-start: 5px;
-      border-radius: 36px;
-      font-size: 20px;
-    }
-
-    div#showtxt {
-      font-size: 27px;
-      margin-top: 20px;
-    }
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Tracker V.11 (Enhanced)</title>
+    <link rel="icon" href="https://www.huana-nbp.go.th/index/add_file/qOv0r0dTue83729.png" type="image/png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     
-    @font-face {
-      font-family: 'Digital dream Fat';
-      src: url('https://semicon.github.io/fonts/DigitaldreamFat.woff2') format('woff2'),
-        url('https://semicon.github.io/fonts/DigitaldreamFat.woff') format('woff');
-      font-weight: normal;
-      font-style: normal;
-      font-display: swap;
-    }
+    <!-- Auto Complete -->
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-ui.autocomplete.scroll@0.1.9/jquery.ui.autocomplete.scroll.min.js"></script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        @font-face {
+            font-family: 'Digital dream Fat';
+            src: url('https://semicon.github.io/fonts/DigitaldreamFat.woff2') format('woff2'),
+                 url('https://semicon.github.io/fonts/DigitaldreamFat.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
 
-    @import url('https://fonts.googleapis.com/css2?family=K2D&family=Kanit&family=Sriracha&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=K2D&family=Kanit&family=Sriracha&display=swap');
 
-    * {
-      margin: 0px;
-      padding: 0px;
-      box-sizing: border-box;
-      font-family: 'K2D', sans-serif;
-    }
+        * {
+            margin: 0px;
+            padding: 0px;
+            box-sizing: border-box;
+            font-family: 'K2D', sans-serif;
+        }
 
-    body {
-    font-family: 'Kanit', sans-serif;
-    color: #444;
-    background-color: white;
-    padding: 20px;
-    border: 2px solid white;
-    box-shadow: 0px 8px 10px rgba(0, 0, 0, 0.5);
-    font-size: 1.05rem;
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    background-color: #92a8d1;
-    background: url("https://www.i-pic.info/i/BbiN536436.jpg") no-repeat center center fixed;
-    -webkit-background-size: cover;
-    -moz-background-size: cover;
-    -o-background-size: cover;
-    background-size: cover;
-    }
+        body {
+            font-family: 'Kanit', sans-serif;
+            color: #444;
+            background-color: white;
+            padding: 20px;
+            border: 2px solid white;
+            box-shadow: 0px 8px 10px rgba(0, 0, 0, 0.5);
+            font-size: 1.05rem;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background-color: #92a8d1;
+            background: url("https://www.i-pic.info/i/BbiN536436.jpg") no-repeat center center fixed;
+            -webkit-background-size: cover;
+            -moz-background-size: cover;
+            -o-background-size: cover;
+            background-size: cover;
+        }
 
-    input#employee {
-     font-family: 'Kanit', sans-serif;
-     width: 282px;
-     height: 60px;
-     background-color: brown;
-     color: yellow;
-     margin-block-start: 5px;
-     border-radius: 36px;
-     font-size: 20px;
-   }
+        .wrapper {
+            background: rgba(221, 255, 255, 0.9);
+            width: 350px;
+            padding: 20px;
+            border: 1px solid #999;
+            border-radius: 15px;
+            box-shadow: 0px 15px 20px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+        }
 
-    .site-logo {
-      content: url("https://www.huana-nbp.go.th/index/add_file/qOv0r0dTue83729.png");
-      display: inline-block;
-      margin-top: 20px;
-      width: auto;
-      height: 100px;
-    }
+        .site-logo {
+            content: url("https://www.huana-nbp.go.th/index/add_file/P0D284NMon35557.png");
+            display: inline-block;
+            margin-top: 20px;
+            width: auto;
+            height: 100px;
+        }
 
-    .msgBg {
-      background-color: transparent;
-    }
+        input#employee {
+            font-family: 'Kanit', sans-serif;
+            width: 100%;
+            height: 60px;
+            background-color: #8B4513;
+            color: #FFD700;
+            border: none;
+            border-radius: 30px;
+            font-size: 18px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
 
-    .wrapper {
-    background: rgba(221, 255, 255, 0.7);
-    width: 350px;
-    padding: 20px;
-    border: 1px solid #999;
-    border-radius: 5px;
-    box-shadow: 0px 15px 20px rgba(0, 0, 0, 0.1);
-    }
+        input#employee:focus {
+            outline: none;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            transform: scale(1.02);
+        }
 
-    /** #### digital clock #### **/
-    .clock {
-      font-family: Digital dream Fat;
-      font-size: 28px;
-      color: #00f6fa;
-      letter-spacing: 3px;
-      text-shadow: 1px 1px 2px teal, 0 0 25px green, 0 0 5px #00fbff;
-      min-width: 98%;
-      background: #444;
-      padding: 5px 0px 5px 10px;
-      display: inline-block;
-      border: 3px solid #ccc;
-      border-radius: 2px;
-      outline-style: solid;
-      outline-color: #999;
-    }
+        .clock {
+            font-family: 'Digital dream Fat';
+            font-size: 28px;
+            color: #00f6fa;
+            letter-spacing: 3px;
+            text-shadow: 1px 1px 2px teal, 0 0 25px green, 0 0 5px #00fbff;
+            width: 100%;
+            background: #444;
+            padding: 10px;
+            display: inline-block;
+            border: 3px solid #ccc;
+            border-radius: 8px;
+            text-align: center;
+        }
 
-    /** #### Queue Status Styles #### **/
-    .queue-status {
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 12px;
-      margin-top: 5px;
-      text-align: center;
-      font-weight: bold;
-    }
+        .btn-enhanced {
+            border-radius: 25px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
 
-    .queue-idle {
-      background-color: #d4edda;
-      color: #155724;
-    }
+        .btn-enhanced:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
 
-    .queue-processing {
-      background-color: #fff3cd;
-      color: #856404;
-    }
+        .btn-enhanced:active {
+            transform: translateY(0);
+        }
 
-    .queue-busy {
-      background-color: #f8d7da;
-      color: #721c24;
-    }
+        .status-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #28a745;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+            animation: pulse 2s infinite;
+        }
 
-    .loading-dots {
-      display: inline-block;
-      position: relative;
-    }
+        .status-indicator.warning {
+            background-color: #ffc107;
+            box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+        }
 
-    .loading-dots::after {
-      content: '...';
-      animation: loading 1.5s infinite;
-    }
+        .status-indicator.error {
+            background-color: #dc3545;
+            box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+        }
 
-    @keyframes loading {
-      0%, 20% { content: '.'; }
-      40% { content: '..'; }
-      60%, 100% { content: '...'; }
-    }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
 
-    .processing-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-    }
+        .queue-status {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            margin-top: 10px;
+        }
 
-    .processing-content {
-      background: white;
-      padding: 30px;
-      border-radius: 10px;
-      text-align: center;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
 
-    .btn-disabled {
-      opacity: 0.6;
-      pointer-events: none;
-    }
-  </style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
 
+        .progress-bar-container {
+            width: 100%;
+            height: 4px;
+            background-color: #e9ecef;
+            border-radius: 2px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #007bff, #28a745);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .feature-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            padding: 5px 10px;
+            background: rgba(255,255,255,0.5);
+            border-radius: 15px;
+        }
+
+        .version-tag {
+            background: linear-gradient(45deg, #007bff, #28a745);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .retry-indicator {
+            display: none;
+            text-align: center;
+            color: #ffc107;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .ui-autocomplete {
+            max-height: 200px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            border-radius: 10px;
+            border: 2px solid #007bff;
+        }
+
+        .ui-menu-item {
+            padding: 8px 12px;
+        }
+
+        .ui-menu-item:hover {
+            background: linear-gradient(90deg, #007bff, #0056b3);
+            color: white;
+        }
+
+        .form-control-lg {
+            border-radius: 20px;
+            border: 2px solid #dee2e6;
+            transition: all 0.3s ease;
+        }
+
+        .form-control-lg:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 10px rgba(0, 123, 255, 0.25);
+        }
+
+        .alert {
+            border-radius: 15px;
+            border: none;
+            font-weight: 500;
+        }
+
+        .msgBg {
+            background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,248,255,0.8));
+            color: #333;
+            border: 1px solid rgba(0,123,255,0.3);
+        }
+    </style>
 </head>
 
 <body>
-  <!-- Processing Overlay -->
-  <div id="processingOverlay" class="processing-overlay">
-    <div class="processing-content">
-      <div class="spinner-border text-primary mb-3" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <h5 id="processingText">กำลังประมวลผล...</h5>
-      <p id="processingDetail" class="text-muted mb-0"></p>
+    <div class="wrapper text-center">
+        <div class="status-indicator" id="systemStatus"></div>
+        
+        <div class="site-logo text-center"></div>
+        <h5>ระบบลงเวลาออนไลน์ อบต.ข่าใหญ่</h5>
+        
+        <div class="feature-indicator">
+            <span><i class="fas fa-rocket"></i> Enhanced System</span>
+            <span class="version-tag">V.11</span>
+        </div>
+
+        <span id="MyClockDisplay" class="clock mt-3"></span>
+
+        <form id="myForm">
+            <div class="row mt-4">
+                <div class="form-group col">
+                    <label for="employee">
+                        <i class="fas fa-user"></i> พิมพ์ชื่อหรือรหัส
+                    </label>
+                    <input id="employee" class="text-center" placeholder="ชื่อ-นามสกุล">
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="form-group col">
+                    <label for="userinfo">
+                        <i class="fas fa-sticky-note"></i> หมายเหตุ: ประชุม/กิจกรรม อื่นๆ
+                    </label>
+                    <input type="search" class="form-control form-control-lg" id="userinfo" name="userinfo" 
+                           list="list" placeholder="เลือกหรือพิมพ์หมายเหตุ">
+                    <datalist id="list">
+                        <option value="ไปราชการ">ไปราชการ</option>
+                        <option value="ลากิจ">ลากิจ</option>
+                        <option value="ลาป่วย">ลาป่วย</option>
+                        <option value="ลาคลอด">ลาคลอด</option>
+                        <option value="ประชุม">ประชุม</option>
+                        <option value="อบรม">อบรม</option>
+                        <option value="ตรวจเยี่ยม">ตรวจเยี่ยม</option>
+                    </datalist>
+                </div>
+            </div>
+
+            <div class="row mt-4 g-2">
+                <div class="col-6">
+                    <button id="clockin" type="button" class="btn btn-lg btn-primary btn-enhanced w-100">
+                        <i class="fas fa-sign-in-alt"></i> Clock In
+                    </button>
+                </div>
+                <div class="col-6">
+                    <button id="clockout" type="button" class="btn btn-lg btn-warning btn-enhanced w-100">
+                        <i class="fas fa-sign-out-alt"></i> Clock Out
+                    </button>
+                </div>
+            </div>
+
+            <div class="progress-bar-container" id="progressContainer" style="display: none;">
+                <div class="progress-bar" id="progressBar" style="width: 0%;"></div>
+            </div>
+
+            <div class="retry-indicator" id="retryIndicator">
+                <i class="fas fa-redo"></i> กำลังลองใหม่...
+            </div>
+
+            <div class="row mt-4">
+                <div class="form-group col">
+                    <div class="alert msgBg" role="alert" id="message">
+                        <i class="fas fa-info-circle"></i> พร้อมใช้งาน
+                    </div>
+                </div>
+            </div>
+
+            <div class="queue-status" id="queueStatus">
+                <i class="fas fa-server"></i> ระบบพร้อมใช้งาน
+            </div>
+        </form>
     </div>
-  </div>
 
-  <div class="wrapper text-center" style="max-width:350px">
-    <div class="site-logo text-center"></div>
-    <h5>ระบบลงเวลาออนไลน์ อบต.ข่าใหญ่</h5>
-   
-
-    <span id="MyClockDisplay" class="clock mt-3" onload="showTime()"></span>
-
-    <form id="myForm">
-
-      <div class="row mt-4">
-        <div class="form-group col">
-          <label for="employee">พิมพ์ชื่อหรือรหัส </label>
-          <input id="employee" class="text-center"> <br>
-        </div>
-      </div>
-
-      <div class="row mt-4">
-        <div class="form-group col">
-          <label for="lblinfo"><i class="fas fa-book-reader"></i> หมายเหตุ:ประชุม/กิจกรรม อื่นๆ</label>
-          <input type="search" class="form-control form-control-lg" id="userinfo" name="userinfo" list="list">
-          <datalist id="list">
-            <option value="ไปราชการ">ไปราชการ</option>
-            <option value="ลากิจ">ลากิจ</option>
-            <option value="ลาป่วย">ลาป่วย</option>
-            <option value="ลาคลอด">ลาคลอด</option>
-          </datalist>
-        </div>
-      </div>
-
-      <div class="row mt-4 g-2">
-        <div class="col-6">
-          <button id="clockin" type="button" class="btn btn-lg btn-primary w-100">Clock In</button>
-        </div>
-        <div class="col-6">
-          <button id="clockout" type="button" class="btn btn-lg btn-warning w-100">Clock Out</button>
-        </div>
-      </div>
-
-      <div class="row mt-4">
-        <div class="form-group col">
-          <div class="alert" role="alert" id="message"></div>
-        </div>
-      </div>
-
-    </form>
-  </div>
-
-  <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
-  <script>
-    // var vConsole = new window.VConsole();
-  </script>
-
-  <script>
-    var scripturl = 'https://script.google.com/macros/s/AKfycbz1fErVaxzVX-6YFD7Q7X_EfwkApE4G8PdPjTK3zqRUbj1GVeFXyuQMFOCr-1_V022c/exec'
-    var owner = 'องค์การบริหารส่วนตำบลข่าใหญ่';
-    var profile, gps;
-    var queueCheckInterval;
-    var isProcessing = false;
-
-    // Queue Management
-    function showProcessingOverlay(text, detail = '') {
-      $('#processingText').text(text);
-      $('#processingDetail').text(detail);
-      $('#processingOverlay').show();
-      $('.btn').addClass('btn-disabled');
-      isProcessing = true;
-    }
-
-    function hideProcessingOverlay() {
-      $('#processingOverlay').hide();
-      $('.btn').removeClass('btn-disabled');
-      isProcessing = false;
-    }
-
-    function updateQueueStatus(status) {
-      const queueEl = $('#queueStatus');
-      
-      if (status.totalInQueue === 0 && status.processing === 0) {
-        queueEl.removeClass('queue-processing queue-busy').addClass('queue-idle');
-        queueEl.text('ระบบพร้อมใช้งาน');
-      } else if (status.processing > 0) {
-        queueEl.removeClass('queue-idle queue-busy').addClass('queue-processing');
-        queueEl.text(`กำลังประมวลผล ${status.processing} รายการ`);
-      } else {
-        queueEl.removeClass('queue-idle queue-processing').addClass('queue-busy');
-        queueEl.text(`คิว ${status.totalInQueue} รายการ`);
-      }
-    }
-
-    function startQueueMonitoring() {
-      queueCheckInterval = setInterval(() => {
-        if (!isProcessing) {
-          $.ajax({
-            method: "POST",
-            url: scripturl,
-            data: { opt: 'queuestatus' },
-            success: function(status) {
-              updateQueueStatus(status);
-            },
-            error: function() {
-              console.log("Queue status check failed");
-            }
-          });
-        }
-      }, 2000);
-    }
-
-    function stopQueueMonitoring() {
-      if (queueCheckInterval) {
-        clearInterval(queueCheckInterval);
-      }
-    }
-
-    $.when(getlocation()).done(function (res) {
-      console.log(res)
-      console.log(gps)
-    });
-
-    $(document).ready(function () {
-      let profile = null;
-
-      $('#clockin').click(() => ClockIn());
-      $('#clockout').click(() => ClockOut());
-      $('#createSheets').click(() => CreateSheets());
-
-      liff.init({
-        liffId: '2000498666-QpjPNOd6',
-        withLoginOnExternalBrowser: true
-      });
-
-      liff.ready.then(() => {
-        profile = liff.getDecodedIDToken();
-
-        if (profile) {
-          console.log("🚀 ~ profile:", profile);
-          console.log("User ID (sub): " + profile.sub);
-          console.log("Display Name (name): " + profile.name);
-          console.log("Email: " + (profile.email || "ไม่พบอีเมล"));
-          console.log("Picture URL: " + (profile.picture || "ไม่พบรูปโปรไฟล์"));
-        } else {
-          console.log("โปรไฟล์ยังไม่พร้อมใช้งานหรือไม่มีข้อมูลโปรไฟล์");
-        }
-
-        initApp();
-        startQueueMonitoring();
-      });
-
-      function initApp() {
-        document.getElementById('message').innerText = owner;
-        document.getElementById('message').className = 'alert msgBg';
+    <!-- Scripts -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    
+    <script>
+        // ===== Enhanced Time Tracker JavaScript =====
         
-        $.ajax({
-          method: "POST",
-          url: scripturl,
-          data: {
-            opt: 'getdata',
-          },
-          success: function (dataPerson) {
-            console.log(dataPerson)
-            $(function () {
-              var availableTags = dataPerson
-              $("#employee").autocomplete({
-                maxShowItems: 3,
-                source: availableTags
-              });
-            });
-          },
-          error: function() {
-            console.log("Failed to load employee data");
-          }
-        })
+        // Configuration
+        const CONFIG = {
+            SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbz1fErVaxzVX-6YFD7Q7X_EfwkApE4G8PdPjTK3zqRUbj1GVeFXyuQMFOCr-1_V022c/exec',
+            OWNER: 'องค์การบริหารส่วนตำบลข่าใหญ่',
+            LIFF_ID: '2000498666-QpjPNOd6',
+            RETRY_ATTEMPTS: 3,
+            RETRY_DELAY: 2000,
+            QUEUE_CHECK_INTERVAL: 5000,
+            HEALTH_CHECK_INTERVAL: 30000
+        };
 
-        getEmployees()
-      }
-    });
+        // Global variables
+        let profile = null;
+        let gps = null;
+        let queueCheckInterval = null;
+        let healthCheckInterval = null;
+        let currentTaskId = null;
+        let retryCount = 0;
 
-    function getEmployees() {
-      $.ajax({
-        method: "POST",
-        url: scripturl,
-        data: {
-          opt: 'getemployee',
-        },
-        success: function (ar) {
-          var employeeSelect = document.getElementById("employee");
+        // Enhanced Queue and System Management
+        class SystemManager {
+            constructor() {
+                this.isOnline = navigator.onLine;
+                this.systemHealth = 'unknown';
+                this.queueLength = 0;
+                this.lastHealthCheck = null;
+                
+                this.initEventListeners();
+                this.startHealthMonitoring();
+            }
 
-          let option = document.createElement("option");
-          option.value = "";
-          option.text = "";
-          employeeSelect.appendChild(option);
+            initEventListeners() {
+                // Network status
+                window.addEventListener('online', () => {
+                    this.isOnline = true;
+                    this.updateSystemStatus();
+                    this.showMessage('เชื่อมต่ออินเทอร์เน็ตแล้ว', 'success');
+                });
 
-          ar.forEach(function (item, index) {
-            let option = document.createElement("option");
-            var employee = item[0];
-            option.value = item[0];
-            option.text = item[0];
-            employeeSelect.appendChild(option);
-          });
-        },
-        error: function() {
-          console.log("Failed to load employees");
+                window.addEventListener('offline', () => {
+                    this.isOnline = false;
+                    this.updateSystemStatus();
+                    this.showMessage('ไม่มีการเชื่อมต่ออินเทอร์เน็ต', 'warning');
+                });
+
+                // Visibility change
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden) {
+                        this.checkSystemHealth();
+                    }
+                });
+            }
+
+            startHealthMonitoring() {
+                // Check system health periodically
+                healthCheckInterval = setInterval(() => {
+                    this.checkSystemHealth();
+                }, CONFIG.HEALTH_CHECK_INTERVAL);
+
+                // Check queue status periodically
+                queueCheckInterval = setInterval(() => {
+                    this.checkQueueStatus();
+                }, CONFIG.QUEUE_CHECK_INTERVAL);
+
+                // Initial checks
+                this.checkSystemHealth();
+                this.checkQueueStatus();
+            }
+
+            async checkSystemHealth() {
+                try {
+                    const response = await this.makeRequest({
+                        opt: 'system_health'
+                    });
+
+                    this.systemHealth = response.overall || 'unknown';
+                    this.lastHealthCheck = new Date();
+                    this.updateSystemStatus();
+
+                } catch (error) {
+                    console.warn('Health check failed:', error);
+                    this.systemHealth = 'error';
+                    this.updateSystemStatus();
+                }
+            }
+
+            async checkQueueStatus() {
+                try {
+                    const response = await this.makeRequest({
+                        opt: 'queue_status'
+                    });
+
+                    this.queueLength = response.queueLength || 0;
+                    this.updateQueueDisplay();
+
+                } catch (error) {
+                    console.warn('Queue status check failed:', error);
+                }
+            }
+
+            updateSystemStatus() {
+                const indicator = document.getElementById('systemStatus');
+                const queueStatus = document.getElementById('queueStatus');
+
+                if (!this.isOnline) {
+                    indicator.className = 'status-indicator error';
+                    queueStatus.innerHTML = '<i class="fas fa-wifi"></i> ไม่มีการเชื่อมต่อ';
+                } else if (this.systemHealth === 'error') {
+                    indicator.className = 'status-indicator error';
+                    queueStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ระบบมีปัญหา';
+                } else if (this.systemHealth === 'warning') {
+                    indicator.className = 'status-indicator warning';
+                    queueStatus.innerHTML = '<i class="fas fa-exclamation-circle"></i> ระบบทำงานช้า';
+                } else {
+                    indicator.className = 'status-indicator';
+                    this.updateQueueDisplay();
+                }
+            }
+
+            updateQueueDisplay() {
+                const queueStatus = document.getElementById('queueStatus');
+                
+                if (this.queueLength > 0) {
+                    queueStatus.innerHTML = `<i class="fas fa-clock"></i> คิวรอประมวลผล: ${this.queueLength} รายการ`;
+                } else {
+                    queueStatus.innerHTML = '<i class="fas fa-check-circle"></i> ระบบพร้อมใช้งาน';
+                }
+            }
+
+            async makeRequest(data, retryAttempt = 0) {
+                try {
+                    const response = await $.ajax({
+                        method: 'POST',
+                        url: CONFIG.SCRIPT_URL,
+                        data: data,
+                        timeout: 15000
+                    });
+
+                    return response;
+
+                } catch (error) {
+                    if (retryAttempt < CONFIG.RETRY_ATTEMPTS) {
+                        this.showRetryIndicator(retryAttempt + 1);
+                        await this.delay(CONFIG.RETRY_DELAY);
+                        return this.makeRequest(data, retryAttempt + 1);
+                    }
+                    throw error;
+                }
+            }
+
+            showRetryIndicator(attempt) {
+                const indicator = document.getElementById('retryIndicator');
+                indicator.style.display = 'block';
+                indicator.innerHTML = `<i class="fas fa-redo"></i> กำลังลองใหม่... (${attempt}/${CONFIG.RETRY_ATTEMPTS})`;
+                
+                setTimeout(() => {
+                    indicator.style.display = 'none';
+                }, CONFIG.RETRY_DELAY);
+            }
+
+            showProgress(percentage) {
+                const container = document.getElementById('progressContainer');
+                const bar = document.getElementById('progressBar');
+                
+                container.style.display = 'block';
+                bar.style.width = percentage + '%';
+                
+                if (percentage >= 100) {
+                    setTimeout(() => {
+                        container.style.display = 'none';
+                        bar.style.width = '0%';
+                    }, 1000);
+                }
+            }
+
+            showMessage(message, type = 'info', duration = 5000) {
+                const messageEl = document.getElementById('message');
+                
+                const icons = {
+                    success: 'fas fa-check-circle',
+                    warning: 'fas fa-exclamation-triangle',
+                    error: 'fas fa-times-circle',
+                    info: 'fas fa-info-circle'
+                };
+
+                const classes = {
+                    success: 'alert alert-success',
+                    warning: 'alert alert-warning',
+                    error: 'alert alert-danger',
+                    info: 'alert msgBg'
+                };
+
+                messageEl.innerHTML = `<i class="${icons[type] || icons.info}"></i> ${message}`;
+                messageEl.className = classes[type] || classes.info;
+
+                if (duration > 0) {
+                    setTimeout(() => {
+                        messageEl.innerHTML = `<i class="fas fa-info-circle"></i> ${CONFIG.OWNER}`;
+                        messageEl.className = 'alert msgBg';
+                    }, duration);
+                }
+            }
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
         }
-      })
-    }
 
-    function CreateSheets() {
-      if (isProcessing) return;
-      
-      showProcessingOverlay('กำลังสร้าง Sheets...', 'กรุณารอสักครู่');
-      
-      $.ajax({
-        method: 'POST',
-        url: scripturl,
-        data: {
-          opt: 'createsheets'
-        },
-        success: function (res) {
-          hideProcessingOverlay();
-          console.log(res);
-          
-          if (res.msg === 'SUCCESS') {
-            $('#message').html('✅ สร้าง Sheets เรียบร้อยแล้ว<br><small>' + res.sheets.join(', ') + '</small>');
-            document.getElementById("message").className = "alert alert-success";
-            
-            // รีเฟรชข้อมูลพนักงาน
+        // Initialize system manager
+        const systemManager = new SystemManager();
+
+        // ===== Location Services =====
+        class LocationService {
+            static async getCurrentLocation() {
+                return new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) {
+                        reject(new Error('Geolocation is not supported'));
+                        return;
+                    }
+
+                    const options = {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 60000
+                    };
+
+                    navigator.geolocation.getCurrentPosition(
+                        position => {
+                            const lat = position.coords.latitude;
+                            const lon = position.coords.longitude;
+                            resolve([lat, lon]);
+                        },
+                        error => {
+                            console.warn('GPS failed, trying IP location:', error);
+                            this.getLocationFromIP()
+                                .then(resolve)
+                                .catch(reject);
+                        },
+                        options
+                    );
+                });
+            }
+
+            static async getLocationFromIP() {
+                try {
+                    const data = await $.getJSON('https://ipapi.co/json/');
+                    return [data.latitude, data.longitude];
+                } catch (error) {
+                    throw new Error('Failed to get location');
+                }
+            }
+        }
+
+        // ===== Enhanced Clock Functions =====
+        async function enhancedClockIn() {
+            const employee = document.getElementById("employee").value.trim();
+            const userinfo = document.getElementById("userinfo").value.trim();
+
+            if (!employee) {
+                systemManager.showMessage('กรุณาเลือกรายชื่อพนักงาน', 'warning');
+                return;
+            }
+
+            if (!profile) {
+                systemManager.showMessage('กรุณารอการโหลดโปรไฟล์', 'warning');
+                return;
+            }
+
+            if (!gps) {
+                systemManager.showMessage('กำลังตรวจสอบตำแหน่ง...', 'info');
+                try {
+                    gps = await LocationService.getCurrentLocation();
+                } catch (error) {
+                    systemManager.showMessage('ไม่สามารถตรวจสอบตำแหน่งได้', 'error');
+                    return;
+                }
+            }
+
+            try {
+                // Show loading
+                systemManager.showMessage(
+                    '<span class="loading-spinner"></span> กำลังบันทึกเวลาเข้างาน...', 
+                    'info', 
+                    0
+                );
+                systemManager.showProgress(25);
+
+                // Disable buttons
+                setButtonsState(false);
+
+                const requestData = {
+                    opt: 'clockin',
+                    employee,
+                    userinfo,
+                    lat: gps[0],
+                    lon: gps[1],
+                    line_name: profile.name,
+                    line_picture: profile.picture
+                };
+
+                systemManager.showProgress(50);
+
+                const response = await systemManager.makeRequest(requestData);
+                
+                systemManager.showProgress(75);
+
+                if (response.msg === 'SUCCESS') {
+                    systemManager.showProgress(100);
+                    systemManager.showMessage(
+                        `${response.employee}<br>บันทึกเวลาเข้างาน ${response.return_date}`, 
+                        'success'
+                    );
+                    clearForm();
+                } else if (response.msg === 'QUEUED') {
+                    currentTaskId = response.taskId;
+                    systemManager.showProgress(100);
+                    systemManager.showMessage(response.message, 'info');
+                    monitorTaskProgress(response.taskId);
+                } else {
+                    systemManager.showMessage(`${response.employee}: ${response.msg}`, 'warning');
+                }
+
+            } catch (error) {
+                console.error('Clock in error:', error);
+                systemManager.showMessage('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง', 'error');
+            } finally {
+                setButtonsState(true);
+                systemManager.showProgress(100);
+            }
+        }
+
+        async function enhancedClockOut() {
+            const employee = document.getElementById("employee").value.trim();
+
+            if (!employee) {
+                systemManager.showMessage('กรุณาเลือกรายชื่อพนักงาน', 'warning');
+                return;
+            }
+
+            if (!profile) {
+                systemManager.showMessage('กรุณารอการโหลดโปรไฟล์', 'warning');
+                return;
+            }
+
+            if (!gps) {
+                systemManager.showMessage('กำลังตรวจสอบตำแหน่ง...', 'info');
+                try {
+                    gps = await LocationService.getCurrentLocation();
+                } catch (error) {
+                    systemManager.showMessage('ไม่สามารถตรวจสอบตำแหน่งได้', 'error');
+                    return;
+                }
+            }
+
+            try {
+                // Show loading
+                systemManager.showMessage(
+                    '<span class="loading-spinner"></span> กำลังบันทึกเวลาออกงาน...', 
+                    'info', 
+                    0
+                );
+                systemManager.showProgress(25);
+
+                // Disable buttons
+                setButtonsState(false);
+
+                const requestData = {
+                    opt: 'clockout',
+                    employee,
+                    lat: gps[0],
+                    lon: gps[1],
+                    line_name: profile.name,
+                    line_picture: profile.picture
+                };
+
+                systemManager.showProgress(50);
+
+                const response = await systemManager.makeRequest(requestData);
+                
+                systemManager.showProgress(75);
+
+                if (response.msg === 'SUCCESS') {
+                    systemManager.showProgress(100);
+                    let message = `${response.employee}<br>บันทึกเวลาออกงาน ${response.return_date}`;
+                    if (response.hours) {
+                        message += `<br>ทำงานรวม ${response.hours} ชั่วโมง`;
+                    }
+                    systemManager.showMessage(message, 'success');
+                    clearForm();
+                } else if (response.msg === 'QUEUED') {
+                    currentTaskId = response.taskId;
+                    systemManager.showProgress(100);
+                    systemManager.showMessage(response.message, 'info');
+                    monitorTaskProgress(response.taskId);
+                } else {
+                    systemManager.showMessage(`${response.employee}: ${response.msg}`, 'warning');
+                }
+
+            } catch (error) {
+                console.error('Clock out error:', error);
+                systemManager.showMessage('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง', 'error');
+            } finally {
+                setButtonsState(true);
+                systemManager.showProgress(100);
+            }
+        }
+
+        function monitorTaskProgress(taskId) {
+            // This would monitor the task progress if we had a task status endpoint
+            // For now, just show that it's in queue
             setTimeout(() => {
-              getEmployees();
-              clearForm();
+                systemManager.showMessage('งานอยู่ในคิว ระบบจะประมวลผลในไม่ช้า', 'info');
             }, 2000);
-          } else {
-            $('#message').html('❌ เกิดข้อผิดพลาด: ' + res.error);
-            document.getElementById("message").className = "alert alert-danger";
-            clearForm();
-          }
-        },
-        error: function() {
-          hideProcessingOverlay();
-          $('#message').html('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ');
-          document.getElementById("message").className = "alert alert-danger";
-          clearForm();
         }
-      });
-    }
 
-    async function ClockIn() {
-      if (isProcessing) return;
-      
-      event.preventDefault()
-      var employee = document.getElementById("employee").value;
-      var userinfo = document.getElementById("userinfo").value;
-
-      if (employee != '') {
-        showProcessingOverlay('กำลังลงเวลาเข้างาน...', 'กรุณารอสักครู่');
-        
-        profile = liff.getDecodedIDToken();
-        
-        $.ajax({
-        method: 'POST',
-        url: scripturl,
-        data: {
-          opt: 'clockin',
-          employee,
-          userinfo,
-          lat: gps[0],
-          lon: gps[1],
-          line_name: profile.name,
-          line_picture: profile.picture
-          },
-          success: function (res) {
-            console.log(res);
+        function setButtonsState(enabled) {
+            const clockInBtn = document.getElementById('clockin');
+            const clockOutBtn = document.getElementById('clockout');
             
-            if (res.msg === 'QUEUED') {
-              hideProcessingOverlay();
-              $('#message').html(`🕒 เข้าคิวแล้ว<br><small>ลำดับที่ ${res.position} - ${res.employee}</small>`);
-              document.getElementById("message").className = "alert alert-info";
-              
-              // ตรวจสอบสถานะคิวจนกว่าจะเสร็จ
-              checkQueueProgress(res.queueId, res.employee, 'เข้างาน');
-              
-            } else if (res.msg === 'SUCCESS') {
-              hideProcessingOverlay();
-              var message = res.employee + '<br> บันทึกเวลามา ' + res.return_date;
-              $('#message').html(message);
-              document.getElementById("message").className = "alert alert-primary";
-              clearForm();
-              
+            clockInBtn.disabled = !enabled;
+            clockOutBtn.disabled = !enabled;
+            
+            if (enabled) {
+                clockInBtn.classList.remove('disabled');
+                clockOutBtn.classList.remove('disabled');
             } else {
-              hideProcessingOverlay();
-              var message = res.employee + ' ' + res.msg;
-              $('#message').html(message);
-              document.getElementById("message").className = "alert alert-warning";
-              clearForm();
+                clockInBtn.classList.add('disabled');
+                clockOutBtn.classList.add('disabled');
             }
-          },
-          error: function() {
-            hideProcessingOverlay();
-            $('#message').html('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ');
-            document.getElementById("message").className = "alert alert-danger";
-            clearForm();
-          }
-        })
+        }
 
-      } else {
-        $('#message').html('กรุณาเลือกรายชื่อพนักงาน ...!');
-        document.getElementById('message').className = 'alert alert-warning text-danger';
-        clearForm();
-      }
-    }
+        function clearForm() {
+            setTimeout(() => {
+                document.getElementById("myForm").reset();
+                systemManager.showMessage(`<i class="fas fa-info-circle"></i> ${CONFIG.OWNER}`, 'info', 0);
+            }, 5000);
+        }
 
-    async function ClockOut() {
-      if (isProcessing) return;
-      
-      event.preventDefault()
-      var employee = document.getElementById("employee").value;
+        // ===== LIFF and Initialization =====
+        $(document).ready(function() {
+            // Button event listeners
+            $('#clockin').click(enhancedClockIn);
+            $('#clockout').click(enhancedClockOut);
 
-      if (employee != '') {
-        showProcessingOverlay('กำลังลงเวลาออกงาน...', 'กรุณารอสักครู่');
-        
-        profile = liff.getDecodedIDToken();
-        
-        $.ajax({
-          method: 'POST',
-          url: scripturl,
-          data: {
-            opt: 'clockout',
-            employee,
-            lat: gps[0],
-            lon: gps[1],
-            line_name: profile.name,
-            line_picture: profile.picture
-          },
-          success: function (res) {
-            console.log(res);
-            
-            if (res.msg === 'QUEUED') {
-              hideProcessingOverlay();
-              $('#message').html(`🕒 เข้าคิวแล้ว<br><small>ลำดับที่ ${res.position} - ${res.employee}</small>`);
-              document.getElementById("message").className = "alert alert-info";
-              
-              checkQueueProgress(res.queueId, res.employee, 'ออกงาน');
-              
-            } else if (res.msg === 'SUCCESS') {
-              hideProcessingOverlay();
-              var message = res.employee + '<br> บันทึกเวลากลับ ' + res.return_date;
-              if (res.workingHours) {
-                message += '<br><small>ทำงาน ' + res.workingHours + ' ชั่วโมง</small>';
-              }
-              $('#message').html(message);
-              document.getElementById("message").className = "alert alert-primary";
-              clearForm();
-              
-            } else {
-              hideProcessingOverlay();
-              var message = res.employee + ' ' + res.msg;
-              $('#message').html(message);
-              document.getElementById("message").className = "alert alert-warning";
-              clearForm();
-            }
-          },
-          error: function() {
-            hideProcessingOverlay();
-            $('#message').html('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ');
-            document.getElementById("message").className = "alert alert-danger";
-            clearForm();
-          }
-        })
+            // Initialize LIFF
+            liff.init({
+                liffId: CONFIG.LIFF_ID,
+                withLoginOnExternalBrowser: true
+            });
 
-      } else {
-        $('#message').html("กรุณาเลือกรายชื่อพนักงาน ...!");
-        document.getElementById("message").className = "alert alert-warning text-danger";
-        clearForm();
-      }
-    }
+            liff.ready.then(() => {
+                profile = liff.getDecodedIDToken();
 
-    function checkQueueProgress(queueId, employee, action) {
-      let attempts = 0;
-      const maxAttempts = 30; // 30 seconds max
-      
-      const progressCheck = setInterval(() => {
-        attempts++;
-        
-        $.ajax({
-          method: "POST",
-          url: scripturl,
-          data: { opt: 'queuestatus' },
-          success: function(status) {
-            updateQueueStatus(status);
-            
-            // หยุดตรวจสอบเมื่อไม่มีงานในคิวแล้ว หรือเกินเวลา
-            if (status.totalInQueue === 0 && status.processing === 0) {
-              clearInterval(progressCheck);
-              $('#message').html(`✅ ลงเวลา${action}เรียบร้อยแล้ว<br><small>${employee}</small>`);
-              document.getElementById("message").className = "alert alert-success";
-              clearForm();
-            } else if (attempts >= maxAttempts) {
-              clearInterval(progressCheck);
-              $('#message').html(`⏳ กำลังประมวลผล...<br><small>กรุณาตรวจสอบผลลัพธ์ในภายหลัง</small>`);
-              document.getElementById("message").className = "alert alert-warning";
-              clearForm();
-            }
-          },
-          error: function() {
-            if (attempts >= maxAttempts) {
-              clearInterval(progressCheck);
-            }
-          }
+                if (profile) {
+                    console.log("Profile loaded:", profile);
+                } else {
+                    console.warn("Profile not available");
+                    systemManager.showMessage('ไม่สามารถโหลดโปรไฟล์ได้', 'warning');
+                }
+
+                initApp();
+            }).catch(error => {
+                console.error('LIFF initialization failed:', error);
+                systemManager.showMessage('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+            });
         });
-      }, 1000);
-    }
 
-    var geolocation
-    function getlocation() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(showPosition, getLocationFromApi);
-      } else {
-        console.log("Geolocation is not supported by this browser.")
-      }
-    }
+        async function initApp() {
+            try {
+                // Get location
+                systemManager.showMessage('กำลังตรวจสอบตำแหน่ง...', 'info');
+                gps = await LocationService.getCurrentLocation();
+                console.log("Location obtained:", gps);
 
-    function showPosition(position) {
-      var lat = position.coords.latitude;
-      var lon = position.coords.longitude;
-      gps = [lat, lon];
-      console.log("🚀 ~ gps:", gps)
-      console.log("Latitude: " + lat + " Longitude: " + lon);
-    }
+                // Load employee data
+                systemManager.showMessage('กำลังโหลดข้อมูลพนักงาน...', 'info');
+                await loadEmployeeData();
 
-    function getLocationFromParameter() {
-      var url = new URL(window.location.href);
-      var lat = url.searchParams.get("lat");
-      var lon = url.searchParams.get("lon");
-      gps = [lat, lon];
-      console.log("Latitude: " + lat + " Longitude: " + lon);
-    }
+                // Initialize autocomplete
+                await initializeAutocomplete();
 
-    function getLocationFromApi() {
-      $.getJSON('https://ipapi.co/json/', function (data) {
-        var lat = data.latitude;
-        var lon = data.longitude;
-        gps = [lat, lon];
-        console.log("Latitude: " + lat + " Longitude: " + lon);
-        return geolocation
-      });
-    }
+                systemManager.showMessage(`<i class="fas fa-check-circle"></i> ${CONFIG.OWNER}`, 'success');
 
-    function clearForm() {
-      setTimeout(function () {
-        document.getElementById('message').innerText = owner;
-        document.getElementById("message").className = "alert msgBg";
-        document.getElementById("myForm").reset();
-      }, 5000);
-    }
+            } catch (error) {
+                console.error('App initialization error:', error);
+                systemManager.showMessage('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'error');
+            }
+        }
 
-    function showTime() {
-      var date = new Date();
-      var h = date.getHours();
-      var m = date.getMinutes();
-      var s = date.getSeconds();
-      var dot = document.textContent = '.';
+        async function loadEmployeeData() {
+            try {
+                const response = await systemManager.makeRequest({
+                    opt: 'getdata'
+                });
 
-      if (s % 2 == 1) {
-        dot = document.textContent = '.';
-      } else {
-        dot = document.textContent = '\xa0';
-      }
+                if (Array.isArray(response)) {
+                    return response;
+                } else {
+                    throw new Error('Invalid employee data format');
+                }
 
-      h = h < 10 ? "0" + h : h;
-      m = m < 10 ? "0" + m : m;
-      s = s < 10 ? "0" + s : s;
+            } catch (error) {
+                console.error('Failed to load employee data:', error);
+                return [];
+            }
+        }
 
-      var time = h + ":" + m + ":" + s + '' + dot;
-      document.getElementById("MyClockDisplay").innerText = time;
-      document.getElementById("MyClockDisplay").textContent = time;
+        async function initializeAutocomplete() {
+            try {
+                const employeeData = await loadEmployeeData();
 
-      setTimeout(showTime, 1000);
-    }
+                $("#employee").autocomplete({
+                    source: employeeData,
+                    maxShowItems: 5,
+                    minLength: 1,
+                    delay: 300,
+                    select: function(event, ui) {
+                        $(this).val(ui.item.value);
+                        return false;
+                    }
+                });
 
-    showTime();
+            } catch (error) {
+                console.error('Failed to initialize autocomplete:', error);
+            }
+        }
 
-    // ทำความสะอาดเมื่อปิดหน้า
-    window.addEventListener('beforeunload', function() {
-      stopQueueMonitoring();
-    });
+        // ===== Digital Clock =====
+        function showTime() {
+            const date = new Date();
+            let h = date.getHours();
+            let m = date.getMinutes();
+            let s = date.getSeconds();
 
-  </script>
-  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+            h = h < 10 ? "0" + h : h;
+            m = m < 10 ? "0" + m : m;
+            s = s < 10 ? "0" + s : s;
+
+            const dot = s % 2 === 1 ? '.' : '\xa0';
+            const time = h + ":" + m + ":" + s + dot;
+
+            document.getElementById("MyClockDisplay").textContent = time;
+            setTimeout(showTime, 1000);
+        }
+
+        // Start the clock
+        showTime();
+
+        // ===== Legacy function aliases for compatibility =====
+        window.ClockIn = enhancedClockIn;
+        window.ClockOut = enhancedClockOut;
+
+        // ===== Cleanup on page unload =====
+        window.addEventListener('beforeunload', () => {
+            if (queueCheckInterval) clearInterval(queueCheckInterval);
+            if (healthCheckInterval) clearInterval(healthCheckInterval);
+        });
+
+    </script>
 </body>
-
 </html>
