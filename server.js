@@ -209,21 +209,93 @@ class GoogleSheetsService {
   }
 
   async getEmployeeWorkRecord(employeeName) {
-    try {
-      const sheet = await this.getSheet(CONFIG.SHEETS.ON_WORK);
-      const rows = await sheet.getRows();
+  try {
+    const sheet = await this.getSheet(CONFIG.SHEETS.ON_WORK);
+    const rows = await sheet.getRows();
+    
+    console.log(`🔍 Looking for employee: ${employeeName}`);
+    console.log(`📊 Total rows in ON_WORK: ${rows.length}`);
+    
+    // ดึง headers จริงมาดู
+    const headers = await sheet.getHeaderValues();
+    console.log('📋 Actual headers:', headers);
+    
+    // Debug: แสดงข้อมูลใน ON_WORK sheet
+    rows.forEach((row, index) => {
+      // ลองหาจากหลายคอลัมน์ที่เป็นไปได้
+      const systemName = row.get('ชื่อในระบบ');
+      const employeeName2 = row.get('ชื่อพนักงาน');
+      const mainRowRef1 = row.get('แถวอ้างอิง');
+      const mainRowRef2 = row.get('แถวในMain');
       
-      const workRecord = rows.find(row => row.get('ชื่อในระบบ') === employeeName);
-      return workRecord ? {
+      console.log(`Row ${index + 1}:`, {
+        ชื่อในระบบ: systemName,
+        ชื่อพนักงาน: employeeName2,
+        แถวอ้างอิง: mainRowRef1,
+        แถวในMain: mainRowRef2,
+        เวลาเข้า: row.get('เวลาเข้า')
+      });
+    });
+    
+    // หาข้อมูลพนักงาน - ลองหลายวิธี
+    const workRecord = rows.find(row => {
+      const systemName = row.get('ชื่อในระบบ');
+      const employeeName2 = row.get('ชื่อพนักงาน');
+      
+      // ลองเปรียบเทียบแบบ exact match และ contains
+      return systemName === employeeName || 
+             employeeName2 === employeeName ||
+             (systemName && systemName.includes(employeeName)) ||
+             (employeeName2 && employeeName2.includes(employeeName));
+    });
+    
+    if (workRecord) {
+      // ลองดึงหมายเลขแถวจากหลายคอลัมน์
+      let mainRowIndex = null;
+      
+      // ลองจาก แถวอ้างอิง ก่อน
+      const rowRef1 = workRecord.get('แถวอ้างอิง');
+      if (rowRef1 && !isNaN(parseInt(rowRef1))) {
+        mainRowIndex = parseInt(rowRef1);
+      }
+      
+      // ถ้าไม่ได้ ลองจาก แถวในMain
+      if (!mainRowIndex) {
+        const rowRef2 = workRecord.get('แถวในMain');
+        if (rowRef2 && !isNaN(parseInt(rowRef2))) {
+          mainRowIndex = parseInt(rowRef2);
+        }
+      }
+      
+      console.log(`✅ Found work record for ${employeeName}:`, {
+        mainRowIndex: mainRowIndex,
+        clockIn: workRecord.get('เวลาเข้า'),
+        systemName: workRecord.get('ชื่อในระบบ'),
+        employeeName: workRecord.get('ชื่อพนักงาน')
+      });
+      
+      return {
         row: workRecord,
-        mainRowIndex: workRecord.get('แถวอ้างอิง')
-      } : null;
+        mainRowIndex: mainRowIndex
+      };
+    } else {
+      console.log(`❌ No work record found for ${employeeName}`);
       
-    } catch (error) {
-      console.error('Error getting employee work record:', error);
+      // แสดงรายชื่อที่มีอยู่เพื่อ debug
+      const availableNames = rows.map(row => ({
+        systemName: row.get('ชื่อในระบบ'),
+        employeeName: row.get('ชื่อพนักงาน')
+      }));
+      console.log('Available employees in ON_WORK:', availableNames);
+      
       return null;
     }
+    
+  } catch (error) {
+    console.error('Error getting employee work record:', error);
+    return null;
   }
+}
 
   async clockIn(data) {
     try {
@@ -297,57 +369,163 @@ class GoogleSheetsService {
 
   async clockOut(data) {
     try {
-      const { employee, lat, lon, line_name } = data;
-      
-      // Check if clocked in
-      const workRecord = await this.getEmployeeWorkRecord(employee);
-      if (!workRecord) {
+        const { employee, lat, lon, line_name } = data;
+        
+        console.log(`⏰ Clock Out request for: "${employee}"`);
+        console.log(`📍 Location: ${lat}, ${lon}`);
+        
+        // Check if clocked in
+        const workRecord = await this.getEmployeeWorkRecord(employee);
+        if (!workRecord) {
+        console.log(`❌ Employee "${employee}" is not clocked in`);
         return {
-          success: false,
-          message: 'คุณต้องลงเวลามาทำงานก่อน',
-          employee
+            success: false,
+            message: 'คุณต้องลงเวลามาทำงานก่อน หรือชื่อไม่ตรงกับที่ลงเวลาเข้า',
+            employee
         };
-      }
+        }
 
-      const timestamp = new Date();
-      const clockInTime = workRecord.row.get('เวลาเข้า');
-      const hoursWorked = (timestamp - new Date(clockInTime)) / (1000 * 60 * 60);
-      const location = `${lat},${lon}`;
+        const timestamp = new Date();
+        
+        // ดึงเวลาเข้าจาก work record
+        const clockInTime = workRecord.row.get('เวลาเข้า');
+        console.log(`⏰ Clock in time: ${clockInTime}`);
+        
+        // คำนวณชั่วโมงทำงาน
+        let hoursWorked = 0;
+        if (clockInTime) {
+        const clockInDate = new Date(clockInTime);
+        hoursWorked = (timestamp - clockInDate) / (1000 * 60 * 60);
+        console.log(`⏱️ Hours worked: ${hoursWorked.toFixed(2)}`);
+        }
+        
+        const location = `${lat},${lon}`;
 
-      // Update MAIN sheet
-      const mainSheet = await this.getSheet(CONFIG.SHEETS.MAIN);
-      const rows = await mainSheet.getRows();
-      const mainRow = rows[workRecord.mainRowIndex - 2];
-      
-      mainRow.set('เวลาออก', timestamp);
-      mainRow.set('พิกัดออก', `${lat},${lon}`);
-      mainRow.set('ที่อยู่ออก', location);
-      mainRow.set('ชั่วโมงทำงาน', hoursWorked.toFixed(2));
-      await mainRow.save();
+        // Update MAIN sheet
+        console.log(`📝 Updating MAIN sheet...`);
+        const mainSheet = await this.getSheet(CONFIG.SHEETS.MAIN);
+        const rows = await mainSheet.getRows();
+        
+        console.log(`📊 Total rows in MAIN: ${rows.length}`);
+        console.log(`🎯 Target row index: ${workRecord.mainRowIndex}`);
+        
+        let mainRow = null;
+        
+        // วิธีที่ 1: ใช้ index โดยตรง (ลบ 2 เพื่อ offset header)
+        if (workRecord.mainRowIndex && workRecord.mainRowIndex > 1) {
+        const targetIndex = workRecord.mainRowIndex - 2; // ลบ 2 เพราะ array index เริ่มจาก 0 และ header row
+        if (targetIndex >= 0 && targetIndex < rows.length) {
+            mainRow = rows[targetIndex];
+            console.log(`✅ Found main row by index: ${targetIndex}`);
+        }
+        }
+        
+        // วิธีที่ 2: หาจากชื่อพนักงานและเวลาเข้า (ถ้าวิธีแรกไม่ได้)
+        if (!mainRow) {
+        console.log('🔍 Searching by employee name and clock in time...');
+        
+        // หาแถวที่มีชื่อตรงกันและยังไม่ได้ clock out
+        const candidateRows = rows.filter(row => {
+            const rowEmployee = row.get('ชื่อพนักงาน');
+            const rowClockOut = row.get('เวลาออก');
+            
+            return (rowEmployee === employee || 
+                    (rowEmployee && rowEmployee.includes(employee)) ||
+                    (employee && employee.includes(rowEmployee))) && 
+                !rowClockOut; // ยังไม่ได้ clock out
+        });
+        
+        console.log(`Found ${candidateRows.length} candidate rows`);
+        
+        if (candidateRows.length === 1) {
+            mainRow = candidateRows[0];
+            console.log(`✅ Found unique candidate row`);
+        } else if (candidateRows.length > 1) {
+            // หาแถวที่เวลาเข้าใกล้เคียงที่สุด
+            let closestRow = null;
+            let minTimeDiff = Infinity;
+            
+            candidateRows.forEach(row => {
+            const rowClockIn = row.get('เวลาเข้า');
+            if (rowClockIn && clockInTime) {
+                const timeDiff = Math.abs(new Date(rowClockIn) - new Date(clockInTime));
+                if (timeDiff < minTimeDiff) {
+                minTimeDiff = timeDiff;
+                closestRow = row;
+                }
+            }
+            });
+            
+            if (closestRow && minTimeDiff < 300000) { // ห่างกันไม่เกิน 5 นาที
+            mainRow = closestRow;
+            console.log(`✅ Found closest matching row (time diff: ${minTimeDiff}ms)`);
+            }
+        }
+        }
+        
+        if (!mainRow) {
+        console.log('❌ Cannot find main row to update');
+        return {
+            success: false,
+            message: 'ไม่พบข้อมูลการลงเวลาเข้างานที่ตรงกัน กรุณาตรวจสอบชื่อ',
+            employee
+        };
+        }
+        
+        console.log('✅ Found main row, updating...');
+        
+        // Update main row with error handling
+        try {
+        mainRow.set('เวลาออก', timestamp);
+        mainRow.set('พิกัดออก', `${lat},${lon}`);
+        mainRow.set('ที่อยู่ออก', location);
+        mainRow.set('ชั่วโมงทำงาน', hoursWorked.toFixed(2));
+        await mainRow.save();
+        console.log('✅ Main row updated successfully');
+        } catch (updateError) {
+        console.error('❌ Error updating main row:', updateError);
+        throw new Error('ไม่สามารถอัปเดตข้อมูลได้: ' + updateError.message);
+        }
 
-      // Remove from ON_WORK sheet
-      await workRecord.row.delete();
+        // Remove from ON_WORK sheet
+        try {
+        await workRecord.row.delete();
+        console.log('✅ Removed from ON_WORK sheet');
+        } catch (deleteError) {
+        console.error('❌ Error deleting from ON_WORK:', deleteError);
+        // ไม่ throw error เพราะข้อมูลหลักอัปเดตแล้ว
+        }
 
-      console.log(`✅ Clock Out: ${employee} at ${this.formatTime(timestamp)} (${hoursWorked.toFixed(2)} hours)`);
+        console.log(`✅ Clock Out: ${employee} at ${this.formatTime(timestamp)} (${hoursWorked.toFixed(2)} hours)`);
 
-      // เรียก GSA webhook สำหรับสร้างแผนที่และส่ง Telegram
-      this.triggerMapGeneration('clockout', {
-        employee, lat, lon, line_name, timestamp, hoursWorked
-      });
+        // เรียก GSA webhook สำหรับสร้างแผนที่และส่ง Telegram
+        try {
+        this.triggerMapGeneration('clockout', {
+            employee, lat, lon, line_name, timestamp, hoursWorked
+        });
+        } catch (webhookError) {
+        console.error('⚠️ Webhook error (non-critical):', webhookError);
+        }
 
-      return {
+        return {
         success: true,
         message: 'บันทึกเวลาออกงานสำเร็จ',
         employee,
         time: this.formatTime(timestamp),
         hours: hoursWorked.toFixed(2)
-      };
+        };
 
     } catch (error) {
-      console.error('Clock out error:', error);
-      throw error;
+        console.error('❌ Clock out error:', error);
+        
+        // Return more specific error message
+        return {
+        success: false,
+        message: `เกิดข้อผิดพลาด: ${error.message}`,
+        employee: data.employee
+        };
     }
-  }
+    }
 
   async triggerMapGeneration(action, data) {
     try {
