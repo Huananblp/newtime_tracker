@@ -102,6 +102,7 @@
             border: 1px solid #999;
             border-radius: 5px;
             box-shadow: 0px 15px 20px rgba(0, 0, 0, 0.1);
+            position: relative;
         }
 
         /** #### digital clock #### **/
@@ -121,27 +122,108 @@
             outline-color: #999;
         }
 
+        /* ===== ไฟสถานะมุมขวาบน ===== */
         .status-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
-            margin-left: 10px;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
         }
 
         .status-online {
-            background-color: #28a745;
-            animation: pulse 2s infinite;
+            background: linear-gradient(45deg, #28a745, #20c997);
+            box-shadow: 
+                0 0 20px rgba(40, 167, 69, 0.6),
+                0 0 40px rgba(40, 167, 69, 0.4),
+                inset 0 1px 3px rgba(255, 255, 255, 0.3);
+            animation: smooth-pulse-green 2s ease-in-out infinite;
         }
 
         .status-offline {
-            background-color: #dc3545;
+            background: linear-gradient(45deg, #dc3545, #e74c3c);
+            box-shadow: 
+                0 0 20px rgba(220, 53, 69, 0.6),
+                0 0 40px rgba(220, 53, 69, 0.4),
+                inset 0 1px 3px rgba(255, 255, 255, 0.3);
+            animation: smooth-pulse-red 2s ease-in-out infinite;
         }
 
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+        .status-connecting {
+            background: linear-gradient(45deg, #ffc107, #fd7e14);
+            box-shadow: 
+                0 0 20px rgba(255, 193, 7, 0.6),
+                0 0 40px rgba(255, 193, 7, 0.4),
+                inset 0 1px 3px rgba(255, 255, 255, 0.3);
+            animation: smooth-pulse-yellow 1s ease-in-out infinite;
+        }
+
+        /* สมูท animations */
+        @keyframes smooth-pulse-green {
+            0%, 100% { 
+                opacity: 1; 
+                transform: scale(1);
+                box-shadow: 
+                    0 0 20px rgba(40, 167, 69, 0.6),
+                    0 0 40px rgba(40, 167, 69, 0.4),
+                    inset 0 1px 3px rgba(255, 255, 255, 0.3);
+            }
+            50% { 
+                opacity: 0.7; 
+                transform: scale(1.1);
+                box-shadow: 
+                    0 0 30px rgba(40, 167, 69, 0.8),
+                    0 0 60px rgba(40, 167, 69, 0.6),
+                    inset 0 1px 3px rgba(255, 255, 255, 0.3);
+            }
+        }
+
+        @keyframes smooth-pulse-red {
+            0%, 100% { 
+                opacity: 1; 
+                transform: scale(1);
+                box-shadow: 
+                    0 0 20px rgba(220, 53, 69, 0.6),
+                    0 0 40px rgba(220, 53, 69, 0.4),
+                    inset 0 1px 3px rgba(255, 255, 255, 0.3);
+            }
+            50% { 
+                opacity: 0.7; 
+                transform: scale(1.1);
+                box-shadow: 
+                    0 0 30px rgba(220, 53, 69, 0.8),
+                    0 0 60px rgba(220, 53, 69, 0.6),
+                    inset 0 1px 3px rgba(255, 255, 255, 0.3);
+            }
+        }
+
+        @keyframes smooth-pulse-yellow {
+            0%, 100% { 
+                opacity: 1; 
+                transform: scale(1);
+                box-shadow: 
+                    0 0 20px rgba(255, 193, 7, 0.6),
+                    0 0 40px rgba(255, 193, 7, 0.4),
+                    inset 0 1px 3px rgba(255, 255, 255, 0.3);
+            }
+            50% { 
+                opacity: 0.8; 
+                transform: scale(1.15);
+                box-shadow: 
+                    0 0 30px rgba(255, 193, 7, 0.8),
+                    0 0 60px rgba(255, 193, 7, 0.6),
+                    inset 0 1px 3px rgba(255, 255, 255, 0.3);
+            }
+        }
+
+        /* Hover effect สำหรับไฟ */
+        .status-indicator:hover {
+            transform: scale(1.2);
+            transition: transform 0.2s ease;
         }
 
         .version-info {
@@ -184,12 +266,11 @@
 <!-- ******* Time Tracker HTML Body *********** -->
 <body>
     <div class="wrapper text-center" style="max-width:350px">
+        <!-- ไฟสถานะมุมขวาบน -->
+        <div id="status-indicator" class="status-indicator status-connecting" title="สถานะการเชื่อมต่อ"></div>
+        
         <div class="site-logo text-center"></div>
         <h5>ระบบลงเวลาออนไลน์ อบต.ข่าใหญ่</h5>
-        <small>
-            <span id="connection-status">🔄 กำลังเชื่อมต่อ...</span>
-            <span id="status-indicator" class="status-indicator"></span>
-        </small>
 
         <span id="MyClockDisplay" class="clock mt-3" onload="showTime()"></span>
 
@@ -234,7 +315,7 @@
     <!-- Version info -->
     <div class="version-info">
         <span id="app-version">v2.1.0</span> | 
-        <span id="server-status">Render</span>
+        <span id="server-status">Songphon</span>
     </div>
 
     <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
@@ -273,7 +354,7 @@
                 const data = await response.json();
                 
                 if (response.ok && data.status === 'healthy') {
-                    updateConnectionStatus('🟢 เชื่อมต่อแล้ว', 'online');
+                    updateConnectionStatus('online');
                     connectionRetryCount = 0;
                     return true;
                 } else {
@@ -281,22 +362,38 @@
                 }
             } catch (error) {
                 console.error('❌ Connection check failed:', error);
-                updateConnectionStatus('🔴 ไม่สามารถเชื่อมต่อได้', 'offline');
+                updateConnectionStatus('offline');
                 
                 if (connectionRetryCount < maxRetries) {
                     connectionRetryCount++;
                     setTimeout(checkServerConnection, 5000);
-                    updateConnectionStatus(`🔄 กำลังลองใหม่... (${connectionRetryCount}/${maxRetries})`, 'offline');
+                    updateConnectionStatus('connecting');
                 }
                 
                 return false;
             }
         }
 
-        function updateConnectionStatus(message, status) {
-            document.getElementById('connection-status').textContent = message;
+        // ฟังก์ชันอัพเดทสถานะไฟ - แค่เปลี่ยนสี ไม่มีข้อความ
+        function updateConnectionStatus(status) {
             const indicator = document.getElementById('status-indicator');
-            indicator.className = `status-indicator status-${status}`;
+            
+            // ลบ class เก่าทั้งหมด
+            indicator.classList.remove('status-online', 'status-offline', 'status-connecting');
+            
+            // เพิ่ม class ใหม่
+            indicator.classList.add(`status-${status}`);
+            
+            // อัพเดท tooltip
+            const statusText = {
+                online: 'เชื่อมต่อแล้ว',
+                offline: 'ไม่สามารถเชื่อมต่อได้',
+                connecting: 'กำลังเชื่อมต่อ...'
+            };
+            
+            indicator.title = statusText[status] || 'ไม่ทราบสถานะ';
+            
+            console.log(`🔘 Status updated: ${status}`);
         }
 
         // ======== GPS Functions - ทำงานเบื้องหลัง ========
