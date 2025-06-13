@@ -51,25 +51,24 @@
             padding: 0px;
             box-sizing: border-box;
             font-family: 'K2D', sans-serif;
-        }        body {
+        }
+
+        body {
             font-family: 'Kanit', sans-serif;
             color: #444;
             background-color: white;
             padding: 20px;
             border: 2px solid white;
             box-shadow: 0px 8px 10px rgba(0, 0, 0, 0.5);
-            font-size: 1.05rem;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;            align-items: center;
-            background-color: #f5f7fa;
-            background: url("https://www.huana-nbp.go.th/index/add_file/bgweb_4Mnmu32Wed73334.png");
+            font-size: 1.05rem;            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background-color: #f8f9fa;
+            background: url("./background.jpg") no-repeat center center;
             -webkit-background-size: cover;
             -moz-background-size: cover;
             -o-background-size: cover;
             background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
         }
 
         input#employee {
@@ -260,86 +259,6 @@
             color: white;
             border: 1px solid #1976d2;
         }
-
-        /* ===== SweetAlert2 Modern Styles ===== */
-        .sweet-popup-modern {
-            border-radius: 20px !important;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3) !important;
-        }
-
-        .sweet-title-modern {
-            font-size: 24px !important;
-            font-weight: 600 !important;
-            margin-bottom: 20px !important;
-        }
-
-        /* ===== SweetAlert2 สไตล์หน่วยงาน ===== */
-        .government-popup {
-            border-radius: 12px !important;
-            font-family: 'Kanit', sans-serif !important;
-        }
-
-        .government-btn-confirm {
-            border-radius: 6px !important;
-            font-weight: 500 !important;
-        }
-
-        .government-btn-cancel {
-            border-radius: 6px !important;
-            font-weight: 500 !important;
-        }
-
-        /* Animation for location spinner */
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Fade animations for SweetAlert */
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translate3d(0, -100%, 0);
-            }
-            to {
-                opacity: 1;
-                transform: translate3d(0, 0, 0);
-            }
-        }
-
-        @keyframes fadeOutUp {
-            from {
-                opacity: 1;
-            }
-            to {
-                opacity: 0;
-                transform: translate3d(0, -100%, 0);
-            }
-        }
-
-        .animate__animated {
-            animation-duration: 0.5s;
-            animation-fill-mode: both;
-        }
-
-        .animate__fadeInDown {
-            animation-name: fadeInDown;
-        }
-
-        .animate__fadeOutUp {
-            animation-name: fadeOutUp;
-        }
-
-        /* ===== Employee Suggestion Popup ===== */
-        .employee-suggestion-popup .swal2-html-container {
-            text-align: left !important;
-        }
-        
-        .employee-suggestion-popup [onclick^="selectSuggestedEmployee"]:hover {
-            background-color: rgba(44, 90, 160, 0.1) !important;
-            border-radius: 4px !important;
-        }
     </style>
 </head>
 
@@ -474,9 +393,11 @@
             indicator.title = statusText[status] || 'ไม่ทราบสถานะ';
             
             console.log(`🔘 Status updated: ${status}`);
-        }        // ======== GPS Functions - ถามครั้งเดียวด้วยป็อปอัพสวย ========
-        async function initializeGPS() {
-            console.log('📍 Initializing GPS with modern popup...');
+        }
+
+        // ======== GPS Functions - ทำงานเบื้องหลัง ========
+        function initializeGPS() {
+            console.log('📍 Initializing GPS silently...');
 
             if (!navigator.geolocation) {
                 console.warn('❌ Geolocation not supported');
@@ -484,8 +405,29 @@
                 return;
             }
 
-            // ไม่ขอตำแหน่งแบบเงียบๆ แล้ว ให้รอจนกว่าผู้ใช้จะกดลงเวลา
-            console.log('📍 GPS initialization ready, waiting for user action...');
+            // ลองขอตำแหน่งแบบเงียบๆ
+            const gpsOptions = {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000
+            };
+
+            navigator.geolocation.getCurrentPosition(
+                onGpsSuccess,
+                onGpsError,
+                gpsOptions
+            );
+
+            // เริ่ม watch position
+            gpsWatchId = navigator.geolocation.watchPosition(
+                onGpsUpdate,
+                onGpsError,
+                {
+                    enableHighAccuracy: true,
+                    timeout: 8000,
+                    maximumAge: 30000
+                }
+            );
         }
 
         function onGpsSuccess(position) {
@@ -505,14 +447,22 @@
             
             gps = [lat, lon];
             console.log(`📍 GPS Updated: ${lat}, ${lon}`);
-        }        function onGpsError(error) {
+        }
+
+        function onGpsError(error) {
             console.warn('⚠️ GPS Error:', error.code, error.message);
             
-            // ไม่ทำอะไร เพียงแค่ log error เพื่อให้ผู้ใช้ขออนุญาตเอง
-            console.log('📍 GPS error occurred, user will need to grant permission manually');
-            isGpsReady = false;
-            gps = null;
-        }function getFallbackLocation() {
+            // ถ้ายังไม่เคยขออนุญาตและเป็น PERMISSION_DENIED
+            if (error.code === error.PERMISSION_DENIED && !hasRequestedPermission) {
+                // ไม่ทำอะไร ปล่อยให้ fallback ทำงาน
+                console.log('📍 Permission denied, will use fallback when needed');
+            }
+            
+            // ลองใช้วิธีอื่น
+            setTimeout(getFallbackLocation, 1000);
+        }
+
+        function getFallbackLocation() {
             console.log('🔄 Using fallback location methods...');
             
             // วิธีที่ 1: URL parameters
@@ -542,83 +492,43 @@
                 .catch(error => {
                     console.warn('⚠️ IP location failed:', error);
                     
-                    // ไม่ใช้ตำแหน่งพื้นฐาน - ให้ผู้ใช้ต้องเปิด GPS เท่านั้น
-                    console.log('❌ No fallback location available');
-                    isGpsReady = false;
-                    gps = null;
+                    // วิธีที่ 3: Default location (อบต.ข่าใหญ่)
+                    gps = [14.0583, 100.6014];
+                    isGpsReady = true;
+                    console.log('📍 Using default location:', gps);
                 });
-        }        // ======== SweetAlert2 GPS Permission ========
+        }
+
+        // ======== SweetAlert2 GPS Permission ========
         async function requestGPSPermission() {
             hasRequestedPermission = true;
             
             const result = await Swal.fire({
-                title: '🌟 ขออนุญาตเข้าถึงตำแหน่ง',
-                html: `
-                    <div style="text-align: center; padding: 20px;">
-                        <div style="font-size: 80px; margin-bottom: 20px;">📍</div>
-                        <div style="font-size: 18px; color: #4a90e2; margin-bottom: 15px;">
-                            เพื่อการลงเวลาที่แม่นยำ
-                        </div>
-                        <div style="font-size: 14px; color: #666; line-height: 1.6;">
-                            ระบบต้องการเข้าถึงตำแหน่งของคุณ<br>
-                            เพื่อบันทึกข้อมูลการเข้า-ออกงานอย่างถูกต้อง
-                        </div>
-                    </div>
-                `,
-                icon: null,
+                title: '📍 ขออนุญาตใช้ตำแหน่ง',
+                text: 'ระบบต้องการเข้าถึงตำแหน่งของคุณเพื่อบันทึกการลงเวลา',
+                icon: 'question',
                 showCancelButton: true,
-                confirmButtonText: '✨ อนุญาต',
-                cancelButtonText: '❌ ไม่อนุญาต',
-                confirmButtonColor: '#28a745',
-                cancelButtonColor: '#dc3545',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                customClass: {
-                    popup: 'sweet-popup-modern',
-                    title: 'sweet-title-modern'
-                },
-                showClass: {
-                    popup: 'animate__animated animate__fadeInDown'
-                },
-                hideClass: {
-                    popup: 'animate__animated animate__fadeOutUp'
-                },
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'อนุญาต',
+                cancelButtonText: 'ไม่อนุญาต',
                 allowOutsideClick: false
             });
 
             if (result.isConfirmed) {
-                // แสดง loading สวยๆ
+                // แสดง loading
                 Swal.fire({
-                    title: '🔍 กำลังค้นหาตำแหน่ง',
-                    html: `
-                        <div style="text-align: center; padding: 20px;">
-                            <div class="location-spinner" style="
-                                width: 60px; 
-                                height: 60px; 
-                                border: 4px solid #f3f3f3; 
-                                border-top: 4px solid #4a90e2; 
-                                border-radius: 50%; 
-                                animation: spin 1s linear infinite;
-                                margin: 0 auto 20px;
-                            "></div>
-                            <div style="color: #4a90e2; font-size: 16px;">
-                                โปรดรอสักครู่...
-                            </div>
-                        </div>
-                        <style>
-                            @keyframes spin {
-                                0% { transform: rotate(0deg); }
-                                100% { transform: rotate(360deg); }
-                            }
-                        </style>
-                    `,
-                    timer: 8000,
+                    title: 'กำลังค้นหาตำแหน่ง...',
+                    html: 'โปรดรอสักครู่',
+                    timer: 5000,
                     timerProgressBar: true,
-                    showConfirmButton: false,
-                    allowOutsideClick: false,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    color: 'white'
-                });                // ขอตำแหน่งด้วยการตั้งค่าที่แม่นยำ และเริ่ม watch position
+                    didOpen: () => {
+                        Swal.showLoading();
+                    },
+                    allowOutsideClick: false
+                });
+
+                // ขอตำแหน่งด้วยการตั้งค่าที่แม่นยำ
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         const lat = position.coords.latitude;
@@ -627,68 +537,29 @@
                         
                         gps = [lat, lon];
                         isGpsReady = true;
-                        hasRequestedPermission = true;
                         
                         console.log(`✅ GPS Permission granted: ${lat}, ${lon}`);
                         
-                        // เริ่ม watch position หลังจากได้อนุญาตแล้ว
-                        gpsWatchId = navigator.geolocation.watchPosition(
-                            onGpsUpdate,
-                            onGpsError,
-                            {
-                                enableHighAccuracy: true,
-                                timeout: 8000,
-                                maximumAge: 30000
-                            }
-                        );
-                        
                         Swal.fire({
-                            title: '🎉 สำเร็จ!',
-                            html: `
-                                <div style="text-align: center; padding: 20px;">
-                                    <div style="font-size: 60px; margin-bottom: 15px;">✅</div>
-                                    <div style="font-size: 16px; color: #28a745; margin-bottom: 10px;">
-                                        พบตำแหน่งแล้ว
-                                    </div>
-                                    <div style="font-size: 14px; color: #666;">
-                                        ความแม่นยำ: ${Math.round(accuracy)} เมตร
-                                    </div>
-                                </div>
-                            `,
-                            icon: null,
-                            timer: 2500,
-                            showConfirmButton: false,
-                            background: 'linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%)',
-                            color: 'white'
+                            title: 'สำเร็จ!',
+                            text: `พบตำแหน่งแล้ว (แม่นยำ ${Math.round(accuracy)} เมตร)`,
+                            icon: 'success',
+                            timer: 2000,
+                            showConfirmButton: false
                         });
                     },
                     (error) => {
                         console.error('❌ GPS Permission error:', error);
                         
                         Swal.fire({
-                            title: '⚠️ ไม่สามารถระบุตำแหน่งได้',
-                            html: `
-                                <div style="text-align: center; padding: 20px;">
-                                    <div style="font-size: 60px; margin-bottom: 15px;">❌</div>
-                                    <div style="font-size: 16px; color: #e74c3c; margin-bottom: 10px;">
-                                        กรุณาเปิด GPS และอนุญาตการเข้าถึงตำแหน่ง
-                                    </div>
-                                    <div style="font-size: 14px; color: #666; line-height: 1.5;">
-                                        หรือตรวจสอบการตั้งค่าเบราว์เซอร์<br>
-                                        เพื่อให้สามารถลงเวลาได้อย่างถูกต้อง
-                                    </div>
-                                </div>
-                            `,
-                            icon: null,
-                            confirmButtonText: '🔄 ลองใหม่',
-                            confirmButtonColor: '#e74c3c',
-                            background: 'linear-gradient(135deg, #ff6b6b 0%, #ffa8a8 100%)',
-                            color: 'white'
+                            title: 'ไม่สามารถหาตำแหน่งได้',
+                            text: 'ระบบจะใช้ตำแหน่งโดยประมาณ',
+                            icon: 'warning',
+                            timer: 3000,
+                            showConfirmButton: false
                         });
                         
-                        // ไม่ใช้ fallback location
-                        isGpsReady = false;
-                        gps = null;
+                        getFallbackLocation();
                     },
                     {
                         enableHighAccuracy: true,
@@ -699,219 +570,35 @@
             } else {
                 // ผู้ใช้ไม่อนุญาต
                 Swal.fire({
-                    title: '🚫 ไม่สามารถลงเวลาได้',
-                    html: `
-                        <div style="text-align: center; padding: 20px;">
-                            <div style="font-size: 60px; margin-bottom: 15px;">🚫</div>
-                            <div style="font-size: 16px; color: #e74c3c; margin-bottom: 10px;">
-                                ต้องอนุญาตการเข้าถึงตำแหน่งเพื่อลงเวลา
-                            </div>
-                            <div style="font-size: 14px; color: #666;">
-                                กรุณาเปิด GPS และลองใหม่อีกครั้ง
-                            </div>
-                        </div>
-                    `,
-                    icon: null,
-                    confirmButtonText: '👍 เข้าใจแล้ว',
-                    confirmButtonColor: '#6c757d',
-                    background: 'linear-gradient(135deg, #636363 0%, #a2a2a2 100%)',
-                    color: 'white'
+                    title: 'ใช้ตำแหน่งโดยประมาณ',
+                    text: 'ระบบจะใช้ตำแหน่งเริ่มต้น',
+                    icon: 'info',
+                    timer: 2000,
+                    showConfirmButton: false
                 });
                 
-                // ไม่ใช้ fallback location
-                isGpsReady = false;
-                gps = null;
-            }        }
-
-        // ======== GPS Permission - สไตล์หน่วยงาน (ถามครั้งเดียว) ========
-        async function requestGPSPermission() {
-            if (hasRequestedPermission && isGpsReady && gps) {
-                return; // ถ้าได้อนุญาตแล้วไม่ต้องถามซ้ำ
+                getFallbackLocation();
             }
-            
-            hasRequestedPermission = true;
-            
-            const result = await Swal.fire({
-                title: 'ขออนุญาตเข้าถึงตำแหน่ง',
-                html: `
-                    <div style="text-align: center; padding: 15px;">
-                        <div style="font-size: 64px; margin-bottom: 15px; color: #00a8cc;">📍</div>
-                        <div style="font-size: 16px; color: #2c5aa0; margin-bottom: 12px; font-weight: 500;">
-                            เพื่อระบุตำแหน่งการลงเวลาให้แม่นยำ
-                        </div>
-                        <div style="font-size: 14px; color: #546e7a; line-height: 1.5;">
-                            ระบบต้องการตรวจสอบตำแหน่งของท่าน<br>
-                            เพื่อบันทึกข้อมูลการเข้า-ออกงานอย่างถูกต้อง
-                        </div>
-                    </div>
-                `,
-                icon: null,
-                showCancelButton: true,
-                confirmButtonText: 'อนุญาต',
-                cancelButtonText: 'ไม่อนุญาต',
-                confirmButtonColor: '#2c5aa0',
-                cancelButtonColor: '#78909c',
-                background: 'rgba(240, 248, 255, 0.95)',
-                color: '#37474f',
-                backdrop: 'rgba(0,0,0,0.3)',
-                allowOutsideClick: false,
-                width: '380px',
-                padding: '25px'
-            });
+        }
 
-            if (result.isConfirmed) {
-                // แสดง loading และขอตำแหน่งในขั้นตอนเดียว
-                const loadingPromise = Swal.fire({
-                    title: 'กำลังค้นหาตำแหน่ง',
-                    html: `
-                        <div style="text-align: center; padding: 20px;">
-                            <div style="
-                                width: 40px; 
-                                height: 40px; 
-                                border: 3px solid #e3f2fd; 
-                                border-top: 3px solid #2c5aa0; 
-                                border-radius: 50%; 
-                                animation: spin 1s linear infinite;
-                                margin: 0 auto 15px;
-                            "></div>
-                            <div style="color: #546e7a; font-size: 14px;">
-                                โปรดรอสักครู่...
-                            </div>
-                        </div>
-                    `,
-                    showConfirmButton: false,
-                    allowOutsideClick: false,
-                    background: 'rgba(240, 248, 255, 0.95)',
-                    color: '#37474f',
-                    width: '320px',
-                    padding: '20px'
-                });
-
-                try {
-                    const position = await new Promise((resolve, reject) => {
-                        navigator.geolocation.getCurrentPosition(resolve, reject, {
-                            enableHighAccuracy: true,
-                            timeout: 15000,
-                            maximumAge: 0
-                        });
-                    });
-
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    const accuracy = position.coords.accuracy;
-                    
-                    gps = [lat, lon];
-                    isGpsReady = true;
-                    
-                    console.log(`✅ GPS Permission granted: ${lat}, ${lon}`);
-                    
-                    // เริ่ม watch position
-                    gpsWatchId = navigator.geolocation.watchPosition(
-                        onGpsUpdate,
-                        onGpsError,
-                        {
-                            enableHighAccuracy: true,
-                            timeout: 8000,
-                            maximumAge: 30000
-                        }
-                    );
-                    
-                    // ปิด loading และแสดงผลสำเร็จ
-                    Swal.close();
-                    
-                    // แสดงข้อความสำเร็จแบบ toast เรียบๆ
-                    const successToast = Swal.mixin({
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 2500,
-                        timerProgressBar: true,
-                        background: 'rgba(76, 175, 80, 0.9)',
-                        color: 'white',
-                        width: '320px'
-                    });
-                    
-                    successToast.fire({
-                        title: `📍 ระบุตำแหน่งสำเร็จ`,
-                        text: `ความแม่นยำ ${Math.round(accuracy)} เมตร`
-                    });
-
-                } catch (error) {
-                    console.error('❌ GPS Permission error:', error);
-                    
-                    Swal.fire({
-                        title: 'ไม่สามารถระบุตำแหน่งได้',
-                        html: `
-                            <div style="text-align: center; padding: 15px;">
-                                <div style="font-size: 48px; margin-bottom: 15px; color: #f57c00;">⚠️</div>
-                                <div style="font-size: 16px; color: #d84315; margin-bottom: 10px;">
-                                    กรุณาตรวจสอบการตั้งค่า GPS
-                                </div>
-                                <div style="font-size: 14px; color: #546e7a; line-height: 1.5;">
-                                    • เปิดการใช้งาน GPS ในอุปกรณ์<br>
-                                    • อนุญาตการเข้าถึงตำแหน่งในเบราว์เซอร์<br>
-                                    • ลองรีเฟรชหน้าเว็บและทำใหม่
-                                </div>
-                            </div>
-                        `,
-                        icon: null,
-                        confirmButtonText: 'เข้าใจแล้ว',
-                        confirmButtonColor: '#2c5aa0',
-                        background: 'rgba(255, 248, 225, 0.95)',
-                        color: '#37474f',
-                        width: '400px'
-                    });
-                    
-                    isGpsReady = false;
-                    gps = null;
-                }
-            } else {
-                // ผู้ใช้ไม่อนุญาต
-                Swal.fire({
-                    title: 'ไม่สามารถใช้งานระบบได้',
-                    html: `
-                        <div style="text-align: center; padding: 15px;">
-                            <div style="font-size: 48px; margin-bottom: 15px; color: #78909c;">🚫</div>
-                            <div style="font-size: 16px; color: #546e7a; margin-bottom: 10px;">
-                                จำเป็นต้องอนุญาตการเข้าถึงตำแหน่งเพื่อใช้งาน
-                            </div>
-                            <div style="font-size: 14px; color: #78909c;">
-                                กรุณารีเฟรชหน้าเว็บและอนุญาตการเข้าถึงตำแหน่ง
-                            </div>
-                        </div>
-                    `,
-                    icon: null,
-                    confirmButtonText: 'เข้าใจแล้ว',
-                    confirmButtonColor: '#78909c',
-                    background: 'rgba(250, 250, 250, 0.95)',
-                    color: '#37474f',
-                    width: '380px'
-                });
-                
-                isGpsReady = false;
-                gps = null;
-            }
-        }        async function ClockIn() {
+        // ======== Enhanced Clock In/Out Functions ========
+        async function ClockIn() {
             event.preventDefault();
             
             var employee = document.getElementById("employee").value;
             var userinfo = document.getElementById("userinfo").value;
 
             if (employee != '') {
-                // ตรวจสอบรายชื่อพนักงานก่อน
-                if (!isValidEmployee(employee)) {
-                    showInvalidEmployeeAlert(employee);
-                    return;
-                }
-                
-                // ตรวจสอบ GPS - ใช้ป็อปอัพสไตล์หน่วยงาน (ถามครั้งเดียว)
-                if (!isGpsReady || !gps || !hasRequestedPermission) {
-                    console.log('📍 GPS not ready, requesting permission with government style popup...');
+                // ตรวจสอบ GPS - ถ้าไม่พร้อมให้ขออนุญาต
+                if (!isGpsReady || !gps) {
+                    console.log('📍 GPS not ready, requesting permission...');
                     await requestGPSPermission();
                     
-                    // ถ้ายังไม่พร้อมให้ออกจากฟังก์ชัน
+                    // ถ้ายังไม่พร้อมให้รอ
                     if (!isGpsReady || !gps) {
-                        return; // ออกจากฟังก์ชันเลย เพราะ requestGPSPermission จะแสดงข้อความเตือนแล้ว
+                        $('#message').html('⚠️ ไม่สามารถระบุตำแหน่งได้ กรุณาลองใหม่');
+                        document.getElementById("message").className = "alert alert-warning";
+                        return;
                     }
                 }
 
@@ -966,49 +653,30 @@
                     $('#message').html('⚠️ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
                     document.getElementById("message").className = "alert alert-danger";
                     clearForm();
-                }            } else {
-                // แสดงข้อความเตือนเมื่อไม่ได้กรอกชื่อ
-                Swal.fire({
-                    title: 'กรุณากรอกชื่อพนักงาน',
-                    html: `
-                        <div style="text-align: center; padding: 15px;">
-                            <div style="font-size: 48px; margin-bottom: 15px; color: #f57c00;">📝</div>
-                            <div style="font-size: 16px; color: #d84315; margin-bottom: 10px;">
-                                โปรดกรอกชื่อพนักงานเพื่อลงเวลาเข้างาน
-                            </div>
-                            <div style="font-size: 14px; color: #546e7a;">
-                                เลือกชื่อจากรายการที่แสดงขึ้นเมื่อพิมพ์
-                            </div>
-                        </div>
-                    `,
-                    icon: null,
-                    confirmButtonText: 'เข้าใจแล้ว',
-                    confirmButtonColor: '#2c5aa0',
-                    background: 'rgba(255, 248, 225, 0.95)',
-                    color: '#37474f',
-                    width: '380px'
-                });
+                }
+            } else {
+                $('#message').html('⚠️ กรุณาเลือกรายชื่อพนักงาน ...!');
+                document.getElementById('message').className = 'alert alert-warning text-danger';
                 clearForm();
             }
-        }        async function ClockOut() {
+        }
+
+        async function ClockOut() {
             event.preventDefault();
             
             var employee = document.getElementById("employee").value;
-              if (employee != '') {
-                // ตรวจสอบรายชื่อพนักงานก่อน
-                if (!isValidEmployee(employee)) {
-                    showInvalidEmployeeAlert(employee);
-                    return;
-                }
-                
-                // ตรวจสอบ GPS - ใช้ป็อปอัพสไตล์หน่วยงาน (ถามครั้งเดียว) เหมือนลงเวลาเข้า
-                if (!isGpsReady || !gps || !hasRequestedPermission) {
-                    console.log('📍 GPS not ready, requesting permission with government style popup...');
+
+            if (employee != '') {
+                // ตรวจสอบ GPS - ถ้าไม่พร้อมให้ขออนุญาต
+                if (!isGpsReady || !gps) {
+                    console.log('📍 GPS not ready, requesting permission...');
                     await requestGPSPermission();
                     
-                    // ถ้ายังไม่พร้อมให้ออกจากฟังก์ชัน
+                    // ถ้ายังไม่พร้อมให้รอ
                     if (!isGpsReady || !gps) {
-                        return; // ออกจากฟังก์ชันเลย เพราะ requestGPSPermission จะแสดงข้อความเตือนแล้ว
+                        $('#message').html('⚠️ ไม่สามารถระบุตำแหน่งได้ กรุณาลองใหม่');
+                        document.getElementById("message").className = "alert alert-warning";
+                        return;
                     }
                 }
 
@@ -1064,28 +732,10 @@
                     $('#message').html('⚠️ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
                     document.getElementById("message").className = "alert alert-danger";
                     clearForm();
-                }            } else {
-                // แสดงข้อความเตือนเมื่อไม่ได้กรอกชื่อ
-                Swal.fire({
-                    title: 'กรุณากรอกชื่อพนักงาน',
-                    html: `
-                        <div style="text-align: center; padding: 15px;">
-                            <div style="font-size: 48px; margin-bottom: 15px; color: #f57c00;">📝</div>
-                            <div style="font-size: 16px; color: #d84315; margin-bottom: 10px;">
-                                โปรดกรอกชื่อพนักงานเพื่อลงเวลาออกงาน
-                            </div>
-                            <div style="font-size: 14px; color: #546e7a;">
-                                เลือกชื่อจากรายการที่แสดงขึ้นเมื่อพิมพ์
-                            </div>
-                        </div>
-                    `,
-                    icon: null,
-                    confirmButtonText: 'เข้าใจแล้ว',
-                    confirmButtonColor: '#2c5aa0',
-                    background: 'rgba(255, 248, 225, 0.95)',
-                    color: '#37474f',
-                    width: '380px'
-                });
+                }
+            } else {
+                $('#message').html("⚠️ กรุณาเลือกรายชื่อพนักงาน ...!");
+                document.getElementById("message").className = "alert alert-warning text-danger";
                 clearForm();
             }
         }
@@ -1173,108 +823,28 @@
                     if (typeof $.fn.autocomplete === 'undefined') {
                         console.error('❌ jQuery UI Autocomplete not loaded');
                         return;
-                    }                    // ตั้งค่า Autocomplete ที่ปรับปรุงแล้ว - Fast & Accurate
+                    }
+                    
+                    // ตั้งค่า Autocomplete
                     $("#employee").autocomplete({
-                        source: function(request, response) {
-                            // ค้นหาแบบเฉพาะเจาะจง - ทั้งชื่อที่ขึ้นต้นและที่มีคำที่ค้นหา
-                            const term = request.term.toLowerCase().trim();
-                            
-                            if (term === '') {
-                                response(dataPerson.slice(0, 10)); // แสดง 10 รายการแรก
-                                return;
-                            }
-
-                            const exactMatches = [];
-                            const startsWith = [];
-                            const contains = [];
-
-                            // ใช้ for loop แทน forEach เพื่อความเร็ว
-                            for (let i = 0; i < dataPerson.length; i++) {
-                                const person = dataPerson[i];
-                                const personLower = person.toLowerCase();
-                                
-                                // 1. ตรงกันทุกตัวอักษร (สำคัญที่สุด)
-                                if (personLower === term) {
-                                    exactMatches.push(person);
-                                }
-                                // 2. ขึ้นต้นด้วยคำที่ค้นหา
-                                else if (personLower.startsWith(term)) {
-                                    startsWith.push(person);
-                                }
-                                // 3. มีคำที่ค้นหาอยู่ในชื่อ
-                                else if (personLower.includes(term)) {
-                                    contains.push(person);
-                                }
-                                
-                                // หยุดค้นหาเมื่อได้ผลลัพธ์เพียงพอแล้ว
-                                if (exactMatches.length + startsWith.length + contains.length >= 10) {
-                                    break;
-                                }
-                            }
-
-                            // รวมผลลัพธ์ตามลำดับความสำคัญ และจำกัดที่ 8 รายการ
-                            const sortedMatches = [...exactMatches, ...startsWith, ...contains].slice(0, 8);
-                            response(sortedMatches);
-                        },
-                        minLength: 1, // แสดงผลเมื่อพิมพ์ 1 ตัวอักษร
-                        delay: 100, // หน่วงเวลาเพียง 100ms เพื่อความเร็ว
+                        source: dataPerson,
+                        minLength: 1, // แสดงผลเมื่อพิมพ์อย่างน้อย 1 ตัวอักษร
+                        maxShowItems: 5, // แสดงสูงสุด 5 รายการ
                         autoFocus: true, // เลือกรายการแรกอัตโนมัติ
+                        delay: 300, // หน่วงเวลา 300ms
                         select: function(event, ui) {
                             // เมื่อเลือกชื่อแล้ว
                             console.log('👤 Selected employee:', ui.item.value);
-                            
-                            // แสดงข้อความยืนยันแบบ toast
-                            setTimeout(() => {
-                                const confirmToast = Swal.mixin({
-                                    toast: true,
-                                    position: 'top-end',
-                                    showConfirmButton: false,
-                                    timer: 1500,
-                                    timerProgressBar: true,
-                                    background: 'rgba(76, 175, 80, 0.9)',
-                                    color: 'white',
-                                    width: '280px',
-                                    customClass: {
-                                        popup: 'fast-toast'
-                                    }
-                                });
-                                
-                                confirmToast.fire({
-                                    title: `✅ เลือก: ${ui.item.value}`
-                                });
-                            }, 50);
-                        },
-                        focus: function(event, ui) {
-                            // แสดงตัวอย่างเมื่อ focus (ไม่ต้อง log เพื่อประสิทธิภาพ)
-                            return false; // ป้องกันการเปลี่ยนค่าใน input ขณะ focus
                         },
                         search: function(event, ui) {
                             console.log('🔍 Searching for:', this.value);
                         },
                         response: function(event, ui) {
-                            console.log('📋 Search results:', ui.content.length, 'items found');
-                            
-                            // แสดงข้อความถ้าไม่มีผลลัพธ์
-                            if (ui.content.length === 0 && $(this).val().trim() !== '') {
-                                ui.content.push({
-                                    label: '🔍 ไม่พบรายชื่อที่ตรงกัน - กรุณาลองพิมพ์ใหม่',
-                                    value: '',
-                                    disabled: true
-                                });
-                            }
+                            console.log('📋 Search results:', ui.content.length, 'items');
                         }
                     });
                     
-                    console.log('✅ Fast Autocomplete initialized successfully');
-                    
-                    // เก็บรายชื่อพนักงานที่ถูกต้องสำหรับการตรวจสอบ
-                    validEmployees = dataPerson;
-                    
-                    // สร้าง search index สำหรับค้นหาเร็ว
-                    buildEmployeeSearchIndex(dataPerson);
-                    
-                    console.log('✅ Valid employees list updated:', validEmployees.length, 'names');
-                    console.log('✅ Search index built with', employeeSearchIndex.size, 'entries');
+                    console.log('✅ Autocomplete initialized successfully');
                     
                     // ทดสอบ Autocomplete
                     const testInput = $("#employee");
@@ -1283,9 +853,6 @@
                     } else {
                         console.error('❌ Employee input field not found');
                     }
-                    
-                    // เก็บรายชื่อพนักงานที่ถูกต้องสำหรับการตรวจสอบ
-                    validEmployees = dataPerson.map(emp => emp.toLowerCase());
                     
                 } else {
                     throw new Error(data.error || 'Invalid employee data format');
@@ -1305,274 +872,16 @@
                     'นางมณี สุภาพ',
                     'นายกิตติ มั่นใจ'
                 ];
-                  $("#employee").autocomplete({
+                
+                $("#employee").autocomplete({
                     source: sampleEmployees,
                     minLength: 1,
-                    delay: 100,
+                    maxShowItems: 5,
                     autoFocus: true
                 });
                 
                 console.log('✅ Sample autocomplete initialized');
             }
-        }
-        
-        // ======== Employee Validation Functions - Fast & Accurate ========        let validEmployees = []; // เก็บรายชื่อพนักงานที่ถูกต้อง
-        let employeeSearchIndex = new Map(); // สร้าง index สำหรับค้นหาเร็ว
-        let employeeCache = new Map(); // เก็บผลลัพธ์การค้นหาไว้ cache
-        
-        // ฟังก์ชันสร้าง search index แบบเร็ว (ปรับปรุงแล้ว)
-        function buildEmployeeSearchIndex(employees) {
-            console.log('🔧 Building fast search index...');
-            const startTime = Date.now();
-            
-            employeeSearchIndex.clear();
-            employeeCache.clear();
-            
-            employees.forEach((employee, index) => {
-                const normalizedName = employee.toLowerCase().trim();
-                
-                // เก็บชื่อเต็ม
-                employeeSearchIndex.set(normalizedName, {
-                    originalName: employee,
-                    index: index,
-                    score: 100 // คะแนนสูงสุดสำหรับชื่อเต็ม
-                });
-                
-                // เก็บคำแต่ละคำในชื่อ
-                const words = normalizedName.split(/\s+/);
-                words.forEach((word, wordIndex) => {
-                    if (word.length > 1) {
-                        const key = `${word}_${index}`;
-                        if (!employeeSearchIndex.has(key)) {
-                            employeeSearchIndex.set(key, {
-                                originalName: employee,
-                                index: index,
-                                score: 80 - (wordIndex * 5), // คะแนนลดลงตามลำดับคำ
-                                isPartial: true,
-                                word: word
-                            });
-                        }
-                    }
-                });
-                
-                // เก็บคำย่อยสำหรับ fuzzy search
-                for (let i = 2; i <= Math.min(normalizedName.length, 6); i++) {
-                    for (let j = 0; j <= normalizedName.length - i; j++) {
-                        const substr = normalizedName.substr(j, i);
-                        const key = `sub_${substr}_${index}`;
-                        if (!employeeSearchIndex.has(key)) {
-                            employeeSearchIndex.set(key, {
-                                originalName: employee,
-                                index: index,
-                                score: 50 - Math.abs(j), // คะแนนขึ้นอยู่กับตำแหน่ง
-                                isSubstring: true,
-                                substring: substr
-                            });
-                        }
-                    }
-                }
-            });
-            
-            const endTime = Date.now();
-            console.log(`✅ Search index built: ${employeeSearchIndex.size} entries in ${endTime - startTime}ms`);
-        }
-          // ฟังก์ชันตรวจสอบว่าชื่อพนักงานอยู่ในรายการหรือไม่ (ปรับปรุงแล้ว - เร็วขึ้น)
-        function isValidEmployee(employeeName) {
-            if (!employeeName || employeeName.trim() === '') {
-                return false;
-            }
-            
-            const normalizedInput = employeeName.toLowerCase().trim();
-            
-            // ตรวจสอบจาก cache ก่อน
-            if (employeeCache.has(normalizedInput)) {
-                return employeeCache.get(normalizedInput);
-            }
-            
-            // ตรวจสอบแบบตรงกันทุกตัวอักษรก่อน (แม่นยำที่สุด)
-            let isValid = false;
-            if (employeeSearchIndex.has(normalizedInput)) {
-                const result = employeeSearchIndex.get(normalizedInput);
-                isValid = result.score === 100; // ต้องเป็นชื่อเต็ม
-            }
-            
-            // ตรวจสอบแบบ exact match กับรายการเดิม (สำรอง)
-            if (!isValid) {
-                isValid = validEmployees.some(emp => emp.toLowerCase().trim() === normalizedInput);
-            }
-            
-            // เก็บผลลัพธ์ใน cache
-            employeeCache.set(normalizedInput, isValid);
-            
-            return isValid;
-        }
-        
-        // ฟังก์ชันค้นหาชื่อที่คล้ายกัน (ปรับปรุงแล้ว - เร็วและแม่นยำขึ้น)
-        function findSimilarEmployees(employeeName, limit = 3) {
-            if (!employeeName) return [];
-            
-            const normalizedInput = employeeName.toLowerCase().trim();
-            const cacheKey = `similar_${normalizedInput}_${limit}`;
-            
-            // ตรวจสอบ cache ก่อน
-            if (employeeCache.has(cacheKey)) {
-                return employeeCache.get(cacheKey);
-            }
-            
-            const suggestions = new Map(); // ใช้ Map เพื่อป้องกันซ้ำ
-            const startTime = Date.now();
-            
-            // 1. ค้นหาจาก search index
-            for (const [key, data] of employeeSearchIndex) {
-                if (suggestions.size >= limit * 2) break; // จำกัดเพื่อประสิทธิภาพ
-                
-                let score = 0;
-                const originalName = data.originalName;
-                const normalizedName = originalName.toLowerCase().trim();
-                
-                // คำนวณคะแนนความคล้าย
-                if (normalizedName.includes(normalizedInput)) {
-                    score = data.score + 20; // โบนัสถ้าตรงบางส่วน
-                } else if (normalizedInput.includes(normalizedName)) {
-                    score = data.score + 15;
-                } else {
-                    // ใช้ Levenshtein distance
-                    const similarity = calculateSimilarity(normalizedInput, normalizedName);
-                    if (similarity > 0.5) {
-                        score = data.score + (similarity * 30);
-                    }
-                }
-                
-                if (score > 50) {
-                    suggestions.set(originalName, {
-                        name: originalName,
-                        score: score
-                    });
-                }
-            }
-            
-            // 2. เรียงลำดับตามคะแนน
-            const sortedSuggestions = Array.from(suggestions.values())
-                .sort((a, b) => b.score - a.score)
-                .slice(0, limit)
-                .map(item => item.name);
-            
-            const endTime = Date.now();
-            console.log(`🔍 Found ${sortedSuggestions.length} suggestions in ${endTime - startTime}ms`);
-            
-            // เก็บใน cache
-            employeeCache.set(cacheKey, sortedSuggestions);
-            
-            return sortedSuggestions;
-        }
-        
-        // ฟังก์ชันคำนวณความคล้ายคลึงแบบง่าย
-        function calculateSimilarity(str1, str2) {
-            const longer = str1.length > str2.length ? str1 : str2;
-            const shorter = str1.length > str2.length ? str2 : str1;
-            
-            if (longer.length === 0) return 1.0;
-            
-            const editDistance = levenshteinDistance(longer, shorter);
-            return (longer.length - editDistance) / longer.length;
-        }
-        
-        // ฟังก์ชันคำนวณ Levenshtein distance
-        function levenshteinDistance(str1, str2) {
-            const matrix = [];
-            
-            for (let i = 0; i <= str2.length; i++) {
-                matrix[i] = [i];
-            }
-            
-            for (let j = 0; j <= str1.length; j++) {
-                matrix[0][j] = j;
-            }
-            
-            for (let i = 1; i <= str2.length; i++) {
-                for (let j = 1; j <= str1.length; j++) {
-                    if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-                        matrix[i][j] = matrix[i - 1][j - 1];
-                    } else {
-                        matrix[i][j] = Math.min(
-                            matrix[i - 1][j - 1] + 1,
-                            matrix[i][j - 1] + 1,
-                            matrix[i - 1][j] + 1
-                        );
-                    }
-                }
-            }
-            
-            return matrix[str2.length][str1.length];
-        }
-          // ฟังก์ชันแสดงข้อความเตือนเมื่อชื่อไม่ถูกต้อง (ปรับปรุงแล้ว)
-        function showInvalidEmployeeAlert(employeeName) {
-            const similarNames = findSimilarEmployees(employeeName);
-            
-            let suggestionsHtml = '';
-            if (similarNames.length > 0) {
-                suggestionsHtml = `
-                    <div style="margin-top: 15px; padding: 10px; background: rgba(76, 175, 80, 0.1); border-radius: 6px;">
-                        <div style="font-size: 14px; color: #2c5aa0; margin-bottom: 8px; font-weight: 500;">
-                            🔍 ชื่อที่คล้ายกัน:
-                        </div>
-                        ${similarNames.map(name => 
-                            `<div style="font-size: 13px; color: #1976d2; cursor: pointer; padding: 2px 0;" 
-                                 onclick="selectSuggestedEmployee('${name.replace(/'/g, "\\'")}')">
-                                • ${name}
-                            </div>`
-                        ).join('')}
-                    </div>
-                `;
-            }
-            
-            Swal.fire({
-                title: 'ไม่พบรายชื่อในระบบ',
-                html: `
-                    <div style="text-align: center; padding: 15px;">
-                        <div style="font-size: 48px; margin-bottom: 15px; color: #f57c00;">👤</div>
-                        <div style="font-size: 16px; color: #d84315; margin-bottom: 10px;">
-                            "<strong>${employeeName}</strong>" ไม่อยู่ในรายการพนักงาน
-                        </div>
-                        <div style="font-size: 14px; color: #546e7a; line-height: 1.5; margin-bottom: 10px;">
-                            กรุณาเลือกชื่อจากรายการที่แสดงขึ้นเมื่อพิมพ์<br>
-                            หรือติดต่อผู้ดูแลระบบเพื่อเพิ่มรายชื่อ
-                        </div>
-                        ${suggestionsHtml}
-                    </div>
-                `,
-                icon: null,
-                confirmButtonText: 'เข้าใจแล้ว',
-                confirmButtonColor: '#2c5aa0',
-                background: 'rgba(255, 248, 225, 0.95)',
-                color: '#37474f',
-                width: '420px',
-                customClass: {
-                    popup: 'employee-suggestion-popup'
-                }
-            });
-        }
-        
-        // ฟังก์ชันสำหรับเลือกชื่อที่แนะนำ
-        function selectSuggestedEmployee(employeeName) {
-            document.getElementById('employee').value = employeeName;
-            Swal.close();
-            
-            // แสดงข้อความยืนยัน
-            const confirmToast = Swal.mixin({
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 2000,
-                timerProgressBar: true,
-                background: 'rgba(76, 175, 80, 0.9)',
-                color: 'white',
-                width: '280px'
-            });
-            
-            confirmToast.fire({
-                title: `✅ เลือก: ${employeeName}`
-            });
         }
 
         function clearForm() {
