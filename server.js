@@ -21,6 +21,9 @@ const CONFIG = {
     BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
     CHAT_ID: process.env.TELEGRAM_CHAT_ID
   },
+  LINE: {
+    LIFF_ID: process.env.LIFF_ID
+  },
   SHEETS: {
     MAIN: 'MAIN',
     EMPLOYEES: 'EMPLOYEES',
@@ -33,6 +36,27 @@ const CONFIG = {
   },
   TIMEZONE: 'Asia/Bangkok'
 };
+
+// ตรวจสอบ required environment variables
+function validateConfig() {
+  const required = [
+    { key: 'GOOGLE_SPREADSHEET_ID', value: CONFIG.GOOGLE_SHEETS.SPREADSHEET_ID },
+    { key: 'GOOGLE_CLIENT_EMAIL', value: CONFIG.GOOGLE_SHEETS.CLIENT_EMAIL },
+    { key: 'GOOGLE_PRIVATE_KEY', value: CONFIG.GOOGLE_SHEETS.PRIVATE_KEY },
+    { key: 'LIFF_ID', value: CONFIG.LINE.LIFF_ID }
+  ];
+
+  const missing = required.filter(item => !item.value);
+  
+  if (missing.length > 0) {
+    console.error('❌ Missing required environment variables:');
+    missing.forEach(item => console.error(`   - ${item.key}`));
+    return false;
+  }
+  
+  console.log('✅ All required environment variables are set');
+  return true;
+}
 
 // ========== Middleware ==========
 app.use(cors());
@@ -50,6 +74,17 @@ app.use('/api/webhook', (req, res, next) => {
 
 // Serve static files
 app.use(express.static('public'));
+
+// Serve ads.txt specifically
+app.get('/ads.txt', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'ads.txt'));
+});
+
+// Serve robots.txt (optional)
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send('User-agent: *\nDisallow: /api/\nAllow: /ads.txt');
+});
 
 // ========== Keep-Alive Service ==========
 class KeepAliveService {
@@ -668,7 +703,11 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     keepAlive: keepAliveService.getStats(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    config: {
+      hasLiffId: !!CONFIG.LINE.LIFF_ID,
+      liffIdLength: CONFIG.LINE.LIFF_ID ? CONFIG.LINE.LIFF_ID.length : 0
+    }
   });
 });
 
@@ -688,6 +727,30 @@ app.post('/api/webhook/ping', (req, res) => {
     status: 'received',
     timestamp: new Date().toISOString()
   });
+});
+
+// API สำหรับ Client Configuration
+app.get('/api/config', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        liffId: CONFIG.LINE.LIFF_ID,
+        apiUrl: CONFIG.RENDER.SERVICE_URL + '/api',
+        environment: process.env.NODE_ENV || 'development',
+        features: {
+          keepAlive: CONFIG.RENDER.KEEP_ALIVE_ENABLED,
+          liffEnabled: !!CONFIG.LINE.LIFF_ID
+        }
+      }
+    });
+  } catch (error) {
+    console.error('API Error - config:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get config'
+    });
+  }
 });
 
 // Get employees
@@ -903,6 +966,13 @@ async function startServer() {
   try {
     console.log('🚀 Starting Time Tracker Server...');
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // ตรวจสอบ environment variables
+    if (!validateConfig()) {
+      console.error('❌ Server startup aborted due to missing configuration');
+      process.exit(1);
+    }
+    
     console.log('📊 Initializing Google Sheets service...');
     
     await sheetsService.initialize();
@@ -911,6 +981,7 @@ async function startServer() {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`📊 Google Sheets connected: ${CONFIG.GOOGLE_SHEETS.SPREADSHEET_ID}`);
       console.log(`🌐 Service URL: ${CONFIG.RENDER.SERVICE_URL}`);
+      console.log(`📱 LIFF ID: ${CONFIG.LINE.LIFF_ID || 'Not configured'}`);
       
       // เริ่ม Keep-Alive service
       keepAliveService.init();
