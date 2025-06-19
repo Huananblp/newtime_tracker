@@ -436,17 +436,42 @@
             cursor: pointer;
             transition: all 0.3s ease;
             font-family: 'K2D', sans-serif;
-        }
-
-        .privacy-btn.accept {
+        }        .privacy-btn.accept {
             background: linear-gradient(135deg, #27ae60, #2ecc71);
             color: white;
+            position: relative;
+            overflow: hidden;
         }
 
-        .privacy-btn.accept:hover {
+        .privacy-btn.accept:enabled {
+            animation: acceptPulse 2s ease-in-out infinite;
+        }
+
+        .privacy-btn.accept:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            animation: none;
+        }
+
+        .privacy-btn.accept:enabled:hover {
             background: linear-gradient(135deg, #219a52, #27ae60);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
+            box-shadow: 0 8px 20px rgba(39, 174, 96, 0.4);
+            animation: none;
+        }
+
+        .privacy-btn.accept:enabled:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 10px rgba(39, 174, 96, 0.3);
+        }
+
+        @keyframes acceptPulse {
+            0%, 100% {
+                box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
+            }
+            50% {
+                box-shadow: 0 5px 25px rgba(39, 174, 96, 0.5);
+            }
         }
 
         .privacy-btn.decline {
@@ -466,27 +491,43 @@
             padding: 15px;
             margin: 15px 0;
             border-radius: 5px;
+        }        .consent-checkbox {
+            display: flex;
+            align-items: flex-start;
+            margin: 20px 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+            border: 2px solid #28a745;
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.1);
+            transition: all 0.3s ease;
         }
 
-        .consent-checkbox {
-            display: flex;
-            align-items: center;
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
+        .consent-checkbox:hover {
+            border-color: #20c997;
+            box-shadow: 0 6px 18px rgba(40, 167, 69, 0.15);
         }
 
         .consent-checkbox input[type="checkbox"] {
-            margin-right: 10px;
-            transform: scale(1.2);
+            margin-right: 15px;
+            margin-top: 5px;
+            transform: scale(1.5);
+            accent-color: #28a745;
+            cursor: pointer;
         }
 
         .consent-checkbox label {
-            font-size: 14px;
-            color: #495057;
+            font-size: 15px;
+            color: #2c3e50;
             cursor: pointer;
+            line-height: 1.6;
+            flex: 1;
+        }
+
+        .consent-checkbox label strong {
+            color: #27ae60;
+            display: block;
+            margin-bottom: 8px;
         }
 
         @media (max-width: 768px) {
@@ -709,24 +750,23 @@
                         <li><strong>อีเมล:</strong> dpo@huana-nbp.go.th</li>
                         <li><strong>โทรศัพท์:</strong> 042-315962 ต่อ 01</li>
                     </ul>
-                </div>
-
-                <div class="consent-checkbox">
+                </div>                <div class="consent-checkbox">
                     <input type="checkbox" id="privacyConsent" required>
                     <label for="privacyConsent">
-                        ข้าพเจ้าได้อ่านและเข้าใจนโยบายความเป็นส่วนตัวและการคุ้มครองข้อมูลส่วนบุคคลแล้ว 
-                        และยินยอมให้องค์การบริหารส่วนตำบลข่าใหญ่เก็บรวบรวม ใช้ และประมวลผลข้อมูลส่วนบุคคลของข้าพเจ้า
-                        เพื่อวัตถุประสงค์ที่ระบุไว้ในนโยบายนี้
+                        <strong>✅ ข้าพเจ้ายอมรับและตกลงในสิ่งต่อไปนี้:</strong><br>
+                        • ได้อ่านและเข้าใจนโยบายความเป็นส่วนตัวและการคุ้มครองข้อมูลส่วนบุคคลแล้ว<br>
+                        • ยินยอมให้องค์การบริหารส่วนตำบลข่าใหญ่เก็บรวบรวม ใช้ และประมวลผลข้อมูลส่วนบุคคลของข้าพเจ้า
+                        เพื่อวัตถุประสงค์ที่ระบุไว้ในนโยบายนี้<br>
+                        • เข้าใจสิทธิและหน้าที่ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (PDPA)
                     </label>
                 </div>
             </div>
-            
-            <div class="privacy-buttons">
+              <div class="privacy-buttons">
                 <button class="privacy-btn accept" id="acceptPrivacy" disabled>
-                    ยอมรับและดำเนินการต่อ
+                    🔒 ยอมรับนโยบายและใช้งานระบบ
                 </button>
                 <button class="privacy-btn decline" id="declinePrivacy">
-                    ไม่ยอมรับ
+                    ❌ ไม่ยอมรับ
                 </button>
             </div>
         </div>
@@ -1293,24 +1333,9 @@
             document.getElementById('adModal').style.display = 'none';
             
             console.log('📺 Ad modal closed');
-        }
-
-        // ======== Enhanced Clock In/Out Functions ========
+        }        // ======== Enhanced Clock In/Out Functions ========
         async function ClockIn() {
             event.preventDefault();
-            
-            // ตรวจสอบ Privacy Consent ก่อน
-            const hasConsent = localStorage.getItem('privacyConsent');
-            if (!hasConsent) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '⚠️ จำเป็นต้องยอมรับนโยบาย',
-                    text: 'กรุณายอมรับนโยบายความเป็นส่วนตัวก่อนใช้งานระบบ',
-                    confirmButtonText: 'ตกลง',
-                    confirmButtonColor: '#f39c12'
-                });
-                return;
-            }
             
             var employee = document.getElementById("employee").value;
             var userinfo = document.getElementById("userinfo").value;
@@ -1395,23 +1420,8 @@
                 document.getElementById('message').className = 'alert alert-warning text-danger';
                 clearForm();
             }
-        }
-
-        async function ClockOut() {
+        }        async function ClockOut() {
             event.preventDefault();
-            
-            // ตรวจสอบ Privacy Consent ก่อน
-            const hasConsent = localStorage.getItem('privacyConsent');
-            if (!hasConsent) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '⚠️ จำเป็นต้องยอมรับนโยบาย',
-                    text: 'กรุณายอมรับนโยบายความเป็นส่วนตัวก่อนใช้งานระบบ',
-                    confirmButtonText: 'ตกลง',
-                    confirmButtonColor: '#f39c12'
-                });
-                return;
-            }
             
             var employee = document.getElementById("employee").value;
 
@@ -1700,10 +1710,10 @@
             if (gpsWatchId) {
                 navigator.geolocation.clearWatch(gpsWatchId);
             }
-        });
-
-        // Privacy Policy Functions
+        });        // Privacy Policy Functions
         function initPrivacyPolicy() {
+            console.log('🔒 Initializing Privacy Policy...');
+            
             const privacyModal = document.getElementById('privacyModal');
             const acceptBtn = document.getElementById('acceptPrivacy');
             const declineBtn = document.getElementById('declinePrivacy');
@@ -1717,16 +1727,46 @@
             const isConsentExpired = consentDate && 
                 (Date.now() - parseInt(consentDate)) > (30 * 24 * 60 * 60 * 1000);
             
+            console.log('🔒 Privacy consent status:', { hasConsent, consentDate, isConsentExpired });
+            
             // แสดง modal หากยังไม่ได้ consent หรือ consent หมดอายุ
             if (!hasConsent || isConsentExpired) {
-                privacyModal.style.display = 'block';
+                console.log('🔒 Showing privacy policy modal...');
+                
+                // แสดง modal ทันที
+                setTimeout(() => {
+                    privacyModal.style.display = 'block';
+                    
+                    // เพิ่ม backdrop สำหรับป้องกันการคลิกข้างนอก
+                    privacyModal.style.zIndex = '99999';
+                    
+                    // แสดงข้อความแจ้งเตือนเพิ่มเติม
+                    const alertMessage = document.createElement('div');
+                    alertMessage.innerHTML = `
+                        <div style="background: #fff3cd; border: 1px solid #ffeeba; padding: 10px; margin-bottom: 15px; border-radius: 5px; color: #856404;">
+                            <strong>📢 หมายเหตุสำคัญ:</strong> กรุณาอ่านนโยบายความเป็นส่วนตัวและยอมรับเพื่อใช้งานระบบลงเวลา
+                        </div>
+                    `;
+                    
+                    const privacyContent = document.querySelector('#privacyModal .privacy-content');
+                    privacyContent.insertBefore(alertMessage, privacyContent.firstChild);
+                }, 100);
                 
                 // ปิดใช้งานฟอร์มจนกว่าจะได้ consent
                 const form = document.getElementById('myForm');
                 if (form) {
                     form.style.pointerEvents = 'none';
                     form.style.opacity = '0.5';
+                    form.style.transition = 'all 0.3s ease';
                 }
+                
+                // ปิดใช้งานปุ่ม clock in/out
+                const clockinBtn = document.getElementById('clockin');
+                const clockoutBtn = document.getElementById('clockout');
+                if (clockinBtn) clockinBtn.disabled = true;
+                if (clockoutBtn) clockoutBtn.disabled = true;
+            } else {
+                console.log('✅ Privacy consent already granted');
             }
             
             // เปิดใช้งานปุ่มยอมรับเมื่อติ๊กเครื่องหมาย
@@ -1734,20 +1774,33 @@
                 acceptBtn.disabled = !this.checked;
                 if (this.checked) {
                     acceptBtn.style.opacity = '1';
+                    acceptBtn.style.cursor = 'pointer';
+                    acceptBtn.style.background = 'linear-gradient(135deg, #27ae60, #2ecc71)';
                 } else {
                     acceptBtn.style.opacity = '0.6';
+                    acceptBtn.style.cursor = 'not-allowed';
+                    acceptBtn.style.background = '#95a5a6';
                 }
             });
             
             // จัดการเมื่อยอมรับ
             acceptBtn.addEventListener('click', function() {
                 if (consentCheckbox.checked) {
+                    console.log('✅ Privacy policy accepted');
+                    
                     // บันทึก consent
                     localStorage.setItem('privacyConsent', 'true');
                     localStorage.setItem('privacyConsentDate', Date.now().toString());
+                    localStorage.setItem('privacyVersion', '1.0'); // เวอร์ชันของนโยบาย
                     
-                    // ปิด modal
-                    privacyModal.style.display = 'none';
+                    // ปิด modal พร้อมเอฟเฟกต์
+                    privacyModal.style.transition = 'opacity 0.3s ease';
+                    privacyModal.style.opacity = '0';
+                    
+                    setTimeout(() => {
+                        privacyModal.style.display = 'none';
+                        privacyModal.style.opacity = '1';
+                    }, 300);
                     
                     // เปิดใช้งานฟอร์ม
                     const form = document.getElementById('myForm');
@@ -1756,22 +1809,31 @@
                         form.style.opacity = '1';
                     }
                     
+                    // เปิดใช้งานปุ่ม clock in/out
+                    const clockinBtn = document.getElementById('clockin');
+                    const clockoutBtn = document.getElementById('clockout');
+                    if (clockinBtn) clockinBtn.disabled = false;
+                    if (clockoutBtn) clockoutBtn.disabled = false;
+                    
                     // แสดงข้อความแจ้งเตือน
                     Swal.fire({
                         icon: 'success',
-                        title: '✅ ยอมรับเรียบร้อย',
-                        text: 'ท่านสามารถใช้งานระบบลงเวลาได้แล้ว',
-                        confirmButtonText: 'ตกลง',
-                        confirmButtonColor: '#27ae60'
+                        title: '✅ ยอมรับนโยบายเรียบร้อย',
+                        html: `
+                            <p>ขอบคุณที่ยอมรับนโยบายความเป็นส่วนตัว</p>
+                            <p><strong>🎉 ตอนนี้ท่านสามารถใช้งานระบบลงเวลาได้แล้ว</strong></p>
+                        `,
+                        confirmButtonText: '🚀 เริ่มใช้งาน',
+                        confirmButtonColor: '#27ae60',
+                        timer: 3000,
+                        timerProgressBar: true
                     });
-                    
-                    console.log('✅ Privacy consent accepted');
                 } else {
                     Swal.fire({
                         icon: 'warning',
                         title: '⚠️ กรุณาอ่านและยอมรับ',
                         text: 'กรุณาติ๊กเครื่องหมายเพื่อยอมรับนโยบายก่อนดำเนินการต่อ',
-                        confirmButtonText: 'ตกลง',
+                        confirmButtonText: 'เข้าใจแล้ว',
                         confirmButtonColor: '#f39c12'
                     });
                 }
@@ -1780,19 +1842,44 @@
             // จัดการเมื่อไม่ยอมรับ
             declineBtn.addEventListener('click', function() {
                 Swal.fire({
-                    icon: 'info',
-                    title: '❌ ไม่ยอมรับ',
-                    text: 'หากท่านไม่ยอมรับนโยบายนี้ จะไม่สามารถใช้งานระบบได้',
-                    confirmButtonText: 'เข้าใจแล้ว',
-                    confirmButtonColor: '#e74c3c'
+                    icon: 'question',
+                    title: '❌ ไม่ยอมรับนโยบาย?',
+                    html: `
+                        <p>หากท่านไม่ยอมรับนโยบายความเป็นส่วนตัว</p>
+                        <p><strong>จะไม่สามารถใช้งานระบบลงเวลาได้</strong></p>
+                        <br>
+                        <p>ท่านต้องการ:</p>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: '📖 อ่านนโยบายอีกครั้ง',
+                    cancelButtonText: '🚪 ออกจากระบบ',
+                    confirmButtonColor: '#3498db',
+                    cancelButtonColor: '#e74c3c'
                 }).then((result) => {
                     if (result.isConfirmed) {
+                        // ให้อ่านนโยบายอีกครั้ง
+                        console.log('📖 User wants to read policy again');
+                        // ไม่ปิด modal ให้อ่านต่อ
+                    } else if (result.isDismissed) {
+                        // ออกจากระบบ
+                        console.log('🚪 User declined and wants to exit');
+                        
                         // ล้างข้อมูล consent
                         localStorage.removeItem('privacyConsent');
                         localStorage.removeItem('privacyConsentDate');
+                        localStorage.removeItem('privacyVersion');
                         
-                        // ปิดหน้าต่าง
-                        window.close();
+                        // แสดงข้อความอำลา
+                        Swal.fire({
+                            icon: 'info',
+                            title: '👋 ขอบคุณที่เข้าชม',
+                            text: 'หากเปลี่ยนใจ สามารถกลับมาใช้งานได้ตลอดเวลา',
+                            confirmButtonText: 'ตกลง',
+                            confirmButtonColor: '#95a5a6'
+                        }).then(() => {
+                            // ปิดหน้าต่าง
+                            window.close();
+                        });
                     }
                 });
             });
@@ -1872,9 +1959,7 @@
             if (event.target === adsModalPolicy) {
                 adsModalPolicy.style.display = 'none';
             }
-        });
-
-        // เริ่มต้นระบบ Privacy Policy
+        });        // เริ่มต้นระบบ Privacy Policy - ปิดใช้งาน
         // document.addEventListener('DOMContentLoaded', function() {
         //     initPrivacyPolicy();
         // });
