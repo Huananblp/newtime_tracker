@@ -617,8 +617,7 @@
             </div>
         </form>
     </div>    <!-- Version info -->
-    <div class="version-info">
-        <span id="app-version">v2.1.1</span> | 
+    <div class="version-info">        <span id="app-version">v2.1.2</span> | 
         <span id="server-status">Time_tracker</span>
     </div>
 
@@ -996,9 +995,7 @@
         
         var owner = 'องค์การบริหารส่วนตำบลข่าใหญ่';
         var connectionRetryCount = 0;
-        var maxRetries = 3;
-
-        // Configuration from server
+        var maxRetries = 3;        // Configuration from server
         var appConfig = null;
 
         // GPS Variables - ทำงานเบื้องหลัง
@@ -1006,6 +1003,10 @@
         var isGpsReady = false;
         var gpsWatchId = null;
         var hasRequestedPermission = false;
+
+        // Employee validation variables
+        var validEmployees = [];
+        var isEmployeeListLoaded = false;
 
         console.log('🌐 API URL:', apiUrl);
         console.log('🏢 Environment:', isProduction ? 'Production' : 'Development');
@@ -1257,12 +1258,62 @@
                 });
                 
                 getFallbackLocation();
+            }        }
+
+        // ======== Employee Validation Functions ========
+        function validateEmployee(employeeName) {
+            if (!isEmployeeListLoaded) {
+                console.warn('⚠️ Employee list not loaded yet');
+                return false;
             }
+            
+            if (!employeeName || employeeName.trim() === '') {
+                return false;
+            }
+            
+            // ตรวจสอบว่าชื่อตรงกับรายการพนักงานหรือไม่ (ไม่สนใจ case)
+            const normalizedInput = employeeName.trim().toLowerCase();
+            const isValid = validEmployees.some(emp => 
+                emp.toLowerCase() === normalizedInput
+            );
+            
+            console.log('👤 Employee validation:', {
+                input: employeeName,
+                normalized: normalizedInput,
+                isValid: isValid,
+                totalEmployees: validEmployees.length
+            });
+            
+            return isValid;
+        }
+
+        function showEmployeeError(employeeName) {
+            $('#message').html(`
+                <div class="mb-2">
+                    <strong>⚠️ ชื่อพนักงานไม่ถูกต้อง</strong>
+                </div>
+                <div class="small">
+                    "<span class="text-danger">${employeeName}</span>" ไม่มีในรายการพนักงาน<br>
+                    กรุณาเลือกจากรายการที่แสดงหรือติดต่อเจ้าหน้าที่
+                </div>
+            `);
+            document.getElementById("message").className = "alert alert-danger";
+            
+            // เน้นช่องกรอกชื่อ
+            const employeeInput = document.getElementById("employee");
+            employeeInput.style.borderColor = '#dc3545';
+            employeeInput.style.boxShadow = '0 0 0 0.2rem rgba(220, 53, 69, 0.25)';
+            
+            // รีเซ็ตสีกรอบหลัง 3 วินาที
+            setTimeout(() => {
+                employeeInput.style.borderColor = '';
+                employeeInput.style.boxShadow = '';
+            }, 3000);
         }
 
         // ======== Ad Modal Functions ========
         let adTimer = null;
-        let adTimeRemaining = 10;        function showAdModal(successMessage) {
+        let adTimeRemaining = 10;function showAdModal(successMessage) {
             // แสดงข้อความสำเร็จ
             document.getElementById('successMessage').innerHTML = successMessage;
             
@@ -1320,6 +1371,12 @@
             var userinfo = document.getElementById("userinfo").value;
 
             if (employee != '') {
+                // ตรวจสอบชื่อพนักงานก่อน
+                if (!validateEmployee(employee)) {
+                    showEmployeeError(employee);
+                    return;
+                }
+                
                 // ตรวจสอบ GPS - ถ้าไม่พร้อมให้ขออนุญาต
                 if (!isGpsReady || !gps) {
                     console.log('📍 GPS not ready, requesting permission...');
@@ -1400,10 +1457,15 @@
             }
         }        async function ClockOut() {
             event.preventDefault();
-            
-            var employee = document.getElementById("employee").value;
+              var employee = document.getElementById("employee").value;
 
             if (employee != '') {
+                // ตรวจสอบชื่อพนักงานก่อน
+                if (!validateEmployee(employee)) {
+                    showEmployeeError(employee);
+                    return;
+                }
+                
                 // ตรวจสอบ GPS - ถ้าไม่พร้อมให้ขออนุญาต
                 if (!isGpsReady || !gps) {
                     console.log('📍 GPS not ready, requesting permission...');
@@ -1499,10 +1561,30 @@
             initializeGPS();
 
             // ตรวจสอบการเชื่อมต่อ
-            checkServerConnection();
-
-            $('#clockin').click(() => ClockIn());
+            checkServerConnection();            $('#clockin').click(() => ClockIn());
             $('#clockout').click(() => ClockOut());
+
+            // เพิ่มการตรวจสอบ real-time เมื่อผู้ใช้พิมพ์
+            $('#employee').on('input blur', function() {
+                const employeeName = $(this).val().trim();
+                const employeeInput = document.getElementById("employee");
+                
+                if (employeeName && isEmployeeListLoaded) {
+                    if (validateEmployee(employeeName)) {
+                        // ชื่อถูกต้อง - เปลี่ยนเป็นสีเขียว
+                        employeeInput.style.borderColor = '#28a745';
+                        employeeInput.style.boxShadow = '0 0 0 0.2rem rgba(40, 167, 69, 0.25)';
+                    } else {
+                        // ชื่อไม่ถูกต้อง - เปลี่ยนเป็นสีแดง
+                        employeeInput.style.borderColor = '#dc3545';
+                        employeeInput.style.boxShadow = '0 0 0 0.2rem rgba(220, 53, 69, 0.25)';
+                    }
+                } else {
+                    // รีเซ็ตสีปกติ
+                    employeeInput.style.borderColor = '';
+                    employeeInput.style.boxShadow = '';
+                }
+            });
 
             // โหลด configuration จาก server ก่อน
             loadAppConfig().then((configLoaded) => {
@@ -1572,11 +1654,16 @@
 
                 const data = await response.json();
                 console.log('📊 Employee data received:', data);
-                
-                if (data.success && data.data && Array.isArray(data.data)) {
+                  if (data.success && data.data && Array.isArray(data.data)) {
                     var dataPerson = data.data;
+                    
+                    // เก็บรายชื่อพนักงานสำหรับการตรวจสอบ
+                    validEmployees = [...dataPerson];
+                    isEmployeeListLoaded = true;
+                    
                     console.log('👥 Employees loaded successfully:', dataPerson.length, 'employees');
                     console.log('📋 Sample employees:', dataPerson.slice(0, 3));
+                    console.log('✅ Valid employees list updated:', validEmployees.length, 'entries');
                     
                     // ตรวจสอบว่า jQuery UI พร้อมใช้งานแล้ว
                     if (typeof $.fn.autocomplete === 'undefined') {
@@ -1594,6 +1681,10 @@
                         select: function(event, ui) {
                             // เมื่อเลือกชื่อแล้ว
                             console.log('👤 Selected employee:', ui.item.value);
+                            // รีเซ็ตสีกรอบเป็นปกติ
+                            const employeeInput = document.getElementById("employee");
+                            employeeInput.style.borderColor = '';
+                            employeeInput.style.boxShadow = '';
                         },
                         search: function(event, ui) {
                             console.log('🔍 Searching for:', this.value);
@@ -1621,8 +1712,7 @@
                 console.error('❌ Failed to load employees:', error);
                 $('#message').html('⚠️ ไม่สามารถโหลดรายชื่อพนักงานได้: ' + error.message);
                 document.getElementById("message").className = "alert alert-warning";
-                
-                // ลองใช้ข้อมูลตัวอย่างถ้าโหลดไม่ได้
+                  // ลองใช้ข้อมูลตัวอย่างถ้าโหลดไม่ได้
                 console.log('🔄 Using sample employee data for testing...');
                 const sampleEmployees = [
                     'นายสมชาย ใจดี',
@@ -1632,14 +1722,26 @@
                     'นายกิตติ มั่นใจ'
                 ];
                 
+                // เก็บข้อมูลตัวอย่างสำหรับการตรวจสอบ
+                validEmployees = [...sampleEmployees];
+                isEmployeeListLoaded = true;
+                
                 $("#employee").autocomplete({
                     source: sampleEmployees,
                     minLength: 1,
                     maxShowItems: 5,
-                    autoFocus: true
+                    autoFocus: true,
+                    select: function(event, ui) {
+                        console.log('👤 Selected sample employee:', ui.item.value);
+                        // รีเซ็ตสีกรอบเป็นปกติ
+                        const employeeInput = document.getElementById("employee");
+                        employeeInput.style.borderColor = '';
+                        employeeInput.style.boxShadow = '';
+                    }
                 });
                 
-                console.log('✅ Sample autocomplete initialized');
+                console.log('✅ Sample autocomplete initialized with validation');
+                console.log('✅ Valid employees list updated with samples:', validEmployees.length, 'entries');
             }
         }
 
