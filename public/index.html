@@ -575,9 +575,7 @@
 <body>
     <div class="wrapper text-center" style="max-width:350px">
         <!-- ไฟสถานะมุมขวาบน -->
-        <div id="status-indicator" class="status-indicator status-connecting" title="สถานะการเชื่อมต่อ"></div>
-        
-        <div class="site-logo text-center"></div>
+        <div id="status-indicator" class="status-indicator status-connecting" title="สถานะการเชื่อมต่อ"></div>        <div class="site-logo text-center"></div>
         <h5>ระบบลงเวลาออนไลน์ อบต.ข่าใหญ่</h5>
 
         <span id="MyClockDisplay" class="clock mt-3" onload="showTime()"></span>
@@ -1033,12 +1031,11 @@
                     return true;
                 } else {
                     throw new Error('Failed to load config');
-                }
-            } catch (error) {
+                }            } catch (error) {
                 console.error('❌ Failed to load app config:', error);
                 // ใช้ค่า default ถ้าโหลดไม่ได้
                 appConfig = {
-                    liffId: '2006435262-Ebxr8BpG', // fallback value
+                    liffId: '', // ไม่ใช้ fallback value - ให้ใช้จาก server เท่านั้น
                     apiUrl: apiUrl,
                     environment: 'development'
                 };
@@ -1160,12 +1157,10 @@
             
             // ลองใช้วิธีอื่น
             setTimeout(getFallbackLocation, 1000);
-        }
-
-        function getFallbackLocation() {
-            console.log('🔄 Using fallback location methods...');
+        }        function getFallbackLocation() {
+            console.log('🔄 Fallback location: Only URL parameters allowed...');
             
-            // วิธีที่ 1: URL parameters
+            // วิธีที่ 1: URL parameters เท่านั้น
             const urlParams = new URLSearchParams(window.location.search);
             const urlLat = urlParams.get('lat');
             const urlLon = urlParams.get('lon');
@@ -1177,26 +1172,10 @@
                 return;
             }
             
-            // วิธีที่ 2: IP Geolocation
-            fetch('https://ipapi.co/json/')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.latitude && data.longitude) {
-                        gps = [data.latitude, data.longitude];
-                        isGpsReady = true;
-                        console.log('📍 Using IP location:', gps);
-                    } else {
-                        throw new Error('No location from IP');
-                    }
-                })
-                .catch(error => {
-                    console.warn('⚠️ IP location failed:', error);
-                    
-                    // วิธีที่ 3: Default location (อบต.ข่าใหญ่)
-                    gps = [14.0583, 100.6014];
-                    isGpsReady = true;
-                    console.log('📍 Using default location:', gps);
-                });
+            // ไม่ใช้ IP Geolocation และ Default Location
+            console.warn('⚠️ No GPS permission and no URL parameters - location unavailable');
+            gps = null;
+            isGpsReady = false;
         }
 
         // ======== SweetAlert2 GPS Permission ========
@@ -1345,10 +1324,9 @@
                 if (!isGpsReady || !gps) {
                     console.log('📍 GPS not ready, requesting permission...');
                     await requestGPSPermission();
-                    
-                    // ถ้ายังไม่พร้อมให้รอ
+                      // ถ้ายังไม่พร้อมให้รอ
                     if (!isGpsReady || !gps) {
-                        $('#message').html('⚠️ ไม่สามารถระบุตำแหน่งได้ กรุณาลองใหม่');
+                        $('#message').html('⚠️ ระบบต้องการตำแหน่งจริงจากผู้ใช้ กรุณาอนุญาตการเข้าถึงตำแหน่ง (Clock In)');
                         document.getElementById("message").className = "alert alert-warning";
                         return;
                     }
@@ -1430,10 +1408,9 @@
                 if (!isGpsReady || !gps) {
                     console.log('📍 GPS not ready, requesting permission...');
                     await requestGPSPermission();
-                    
-                    // ถ้ายังไม่พร้อมให้รอ
+                      // ถ้ายังไม่พร้อมให้รอ
                     if (!isGpsReady || !gps) {
-                        $('#message').html('⚠️ ไม่สามารถระบุตำแหน่งได้ กรุณาลองใหม่');
+                        $('#message').html('⚠️ ระบบต้องการตำแหน่งจริงจากผู้ใช้ กรุณาอนุญาตการเข้าถึงตำแหน่ง (Clock Out)');
                         document.getElementById("message").className = "alert alert-warning";
                         return;
                     }
