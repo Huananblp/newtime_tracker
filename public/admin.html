@@ -317,14 +317,53 @@
             color: #6c757d;
             font-size: 0.9rem;
         }
-        
-        .status-badge {
+          .status-badge {
             background: linear-gradient(135deg, #28a745, #20c997);
             color: white;
             padding: 5px 12px;
             border-radius: 15px;
             font-size: 0.8rem;
             font-weight: 600;
+        }
+        
+        /* Employee Controls */
+        .employee-controls {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .employee-count {
+            text-align: center;
+            padding: 8px 0;
+        }
+        
+        /* Pagination */
+        #employeePagination .page-link {
+            color: #2c3e50;
+            border-color: #dee2e6;
+        }
+        
+        #employeePagination .page-item.active .page-link {
+            background-color: #2c3e50;
+            border-color: #2c3e50;
+        }
+        
+        #employeePagination .page-link:hover {
+            color: #1a252f;
+            background-color: #e9ecef;
+            border-color: #dee2e6;
+        }
+        
+        /* Employee Item Animation */
+        .employee-item {
+            transition: all 0.3s ease;
+        }
+        
+        .employee-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
         
         /* Responsive */
@@ -480,18 +519,64 @@
                             <div class="stats-label">ขาดงานวันนี้</div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Currently Working Employees -->
+                </div>                <!-- Currently Working Employees -->
                 <div class="working-panel">
                     <h5 class="export-title">
                         <i class="fas fa-users-cog"></i>
                         พนักงานที่กำลังทำงาน
                     </h5>
+                    
+                    <!-- Employee Filter Controls -->
+                    <div class="employee-controls mb-3">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-search"></i>
+                                    </span>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="employeeSearch" 
+                                           placeholder="ค้นหาชื่อพนักงาน..."
+                                           onkeyup="filterEmployees()">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="itemsPerPage" onchange="changeItemsPerPage()">
+                                    <option value="10">แสดง 10 รายการ</option>
+                                    <option value="30" selected>แสดง 30 รายการ</option>
+                                    <option value="50">แสดง 50 รายการ</option>
+                                    <option value="100">แสดง 100 รายการ</option>
+                                    <option value="all">แสดงทั้งหมด</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="sortBy" onchange="sortEmployees()">
+                                    <option value="name">เรียงตามชื่อ</option>
+                                    <option value="clockin">เรียงตามเวลาเข้างาน</option>
+                                    <option value="workinghours">เรียงตามชั่วโมงทำงาน</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="employee-count">
+                                    <small class="text-muted">
+                                        <span id="displayedCount">0</span> / <span id="totalCount">0</span> คน
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Employee List -->
                     <div id="workingEmployeesList">
                         <div class="text-center text-muted">
                             <i class="fas fa-spinner fa-spin"></i> กำลังโหลดข้อมูล...
                         </div>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <div id="employeePagination" class="d-flex justify-content-center mt-3">
+                        <!-- Pagination will be generated here -->
                     </div>
                 </div>
             </div>
@@ -749,32 +834,35 @@
                 console.error('Error loading stats:', error);
             }
         }
-        
-        // ฟังก์ชันจัดการเวลาให้แสดงเป็นเวลาไทย
+          // ฟังก์ชันจัดการเวลาให้แสดงเป็นเวลาไทย
         function formatThaiTime(timeString) {
-            if (!timeString) return '';
+            if (!timeString) return '-';
             
             try {
-                // ถ้าเป็นเวลาที่มาจาก server แล้วเป็น string
-                if (typeof timeString === 'string') {
-                    // ถ้าเป็นรูปแบบ 'YYYY-MM-DD HH:mm:ss' (จาก moment)
-                    if (timeString.includes(' ') && timeString.length === 19) {
-                        const timePart = timeString.split(' ')[1];
-                        return timePart;
-                    }
-                    // ถ้ามี ' น.' ต่อท้ายอยู่แล้ว
-                    if (timeString.includes(' น.')) {
-                        return timeString;
-                    }
-                    // ลองแปลงเป็น Date object
-                    const date = new Date(timeString);
-                    if (!isNaN(date.getTime())) {
-                        return date.toLocaleTimeString('th-TH', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            timeZone: 'Asia/Bangkok'
-                        });
-                    }
+                // ถ้าเป็นรูปแบบ HH:mm ที่ส่งมาจาก server แล้ว
+                if (typeof timeString === 'string' && timeString.match(/^\d{2}:\d{2}$/)) {
+                    return timeString;
+                }
+                
+                // ถ้าเป็นรูปแบบ 'YYYY-MM-DD HH:mm:ss' (จาก moment)
+                if (typeof timeString === 'string' && timeString.includes(' ') && timeString.length === 19) {
+                    const timePart = timeString.split(' ')[1];
+                    return timePart.substring(0, 5); // เอาแค่ HH:mm
+                }
+                
+                // ถ้ามี ' น.' ต่อท้ายอยู่แล้ว
+                if (timeString.includes(' น.')) {
+                    return timeString;
+                }
+                
+                // ลองแปลงเป็น Date object
+                const date = new Date(timeString);
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleTimeString('th-TH', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: 'Asia/Bangkok'
+                    });
                 }
                 
                 // ถ้าเป็น Date object
@@ -789,7 +877,7 @@
                 return timeString;
             } catch (error) {
                 console.error('Error formatting time:', error);
-                return timeString;
+                return timeString || '-';
             }
         }
 
@@ -811,31 +899,47 @@
                 console.error('Error formatting date:', error);
                 return dateString;
             }
-        }
-          // โหลดรายชื่อพนักงานที่กำลังทำงาน
+        }        // โหลดรายชื่อพนักงานที่กำลังทำงาน
+        let allWorkingEmployees = []; // เก็บข้อมูลพนักงานทั้งหมด
+        let filteredEmployees = []; // เก็บข้อมูลหลังกรอง
+        let currentPage = 1;
+        let itemsPerPageValue = 30;
+        
         function loadWorkingEmployees(employees) {
+            allWorkingEmployees = [...employees];
+            filteredEmployees = [...employees];
+            
+            updateEmployeeCount();
+            displayEmployees();
+        }
+        
+        function updateEmployeeCount() {
+            document.getElementById('totalCount').textContent = allWorkingEmployees.length;
+        }
+        
+        function displayEmployees() {
             const container = document.getElementById('workingEmployeesList');
             
-            if (employees.length === 0) {
+            if (filteredEmployees.length === 0) {
                 container.innerHTML = `
                     <div class="text-center text-muted">
                         <i class="fas fa-user-clock"></i>
                         <p>ไม่มีพนักงานที่กำลังทำงานในขณะนี้</p>
                     </div>
                 `;
+                document.getElementById('displayedCount').textContent = '0';
+                document.getElementById('employeePagination').innerHTML = '';
                 return;
             }
             
-            const html = employees.map(emp => {
-                // จัดการเวลาให้แสดงถูกต้อง
+            // คำนวณ pagination
+            const startIndex = (currentPage - 1) * itemsPerPageValue;
+            const endIndex = itemsPerPageValue === 'all' ? filteredEmployees.length : startIndex + itemsPerPageValue;
+            const currentEmployees = filteredEmployees.slice(startIndex, endIndex);
+            
+            // แสดงรายการพนักงาน
+            const html = currentEmployees.map(emp => {
                 const clockInTime = formatThaiTime(emp.clockIn);
-                
-                // Debug: แสดงข้อมูลเวลาที่ได้รับ
-                console.log(`👤 ${emp.name}:`, {
-                    original: emp.clockIn,
-                    formatted: clockInTime,
-                    workingHours: emp.workingHours
-                });
                 
                 return `
                     <div class="employee-item">
@@ -855,6 +959,123 @@
             }).join('');
             
             container.innerHTML = html;
+            
+            // อัปเดตจำนวนที่แสดง
+            document.getElementById('displayedCount').textContent = currentEmployees.length;
+            
+            // สร้าง pagination
+            if (itemsPerPageValue !== 'all') {
+                generatePagination();
+            } else {
+                document.getElementById('employeePagination').innerHTML = '';
+            }
+        }
+        
+        function generatePagination() {
+            const totalPages = Math.ceil(filteredEmployees.length / itemsPerPageValue);
+            const paginationContainer = document.getElementById('employeePagination');
+            
+            if (totalPages <= 1) {
+                paginationContainer.innerHTML = '';
+                return;
+            }
+            
+            let html = '<nav><ul class="pagination">';
+            
+            // Previous button
+            html += `
+                <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+            `;
+            
+            // Page numbers
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            if (startPage > 1) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1)">1</a></li>`;
+                if (startPage > 2) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+                    </li>
+                `;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${totalPages})">${totalPages}</a></li>`;
+            }
+            
+            // Next button
+            html += `
+                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+            `;
+            
+            html += '</ul></nav>';
+            paginationContainer.innerHTML = html;
+        }
+        
+        function changePage(page) {
+            const totalPages = Math.ceil(filteredEmployees.length / itemsPerPageValue);
+            if (page < 1 || page > totalPages) return;
+            
+            currentPage = page;
+            displayEmployees();
+        }
+        
+        function changeItemsPerPage() {
+            const select = document.getElementById('itemsPerPage');
+            itemsPerPageValue = select.value === 'all' ? 'all' : parseInt(select.value);
+            currentPage = 1;
+            displayEmployees();
+        }
+        
+        function filterEmployees() {
+            const searchTerm = document.getElementById('employeeSearch').value.toLowerCase();
+            
+            filteredEmployees = allWorkingEmployees.filter(emp => 
+                emp.name.toLowerCase().includes(searchTerm)
+            );
+            
+            currentPage = 1;
+            displayEmployees();
+        }
+        
+        function sortEmployees() {
+            const sortBy = document.getElementById('sortBy').value;
+            
+            filteredEmployees.sort((a, b) => {
+                switch (sortBy) {
+                    case 'name':
+                        return a.name.localeCompare(b.name, 'th');
+                    case 'clockin':
+                        return a.clockIn.localeCompare(b.clockIn);
+                    case 'workinghours':
+                        const aHours = parseFloat(a.workingHours.replace(' ชม.', ''));
+                        const bHours = parseFloat(b.workingHours.replace(' ชม.', ''));
+                        return bHours - aHours; // เรียงจากมากไปน้อย
+                    default:
+                        return 0;
+                }
+            });
+            
+            currentPage = 1;
+            displayEmployees();
         }
         
         // ฟังก์ชัน Export
@@ -1076,23 +1297,30 @@
                     window.location.href = '/admin/login';
                 }
             });
-        }
-          // เตรียมข้อมูลเริ่มต้น
+        }          // เตรียมข้อมูลเริ่มต้น
         function initializePage() {
-            // ตั้งวันที่เริ่มต้นให้เป็นเวลาไทย
+            // ใช้เวลาไทยโดยตรง
             const today = new Date();
-            // แปลงเป็นเวลาไทยสำหรับ input date
-            const thaiDate = new Date(today.getTime() + (7 * 60 * 60 * 1000)); // +7 hours for Thailand timezone
-            const dateString = thaiDate.toISOString().split('T')[0];
+            
+            // ตั้งวันที่เริ่มต้นให้เป็นเวลาไทย
+            const dateString = today.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }); // YYYY-MM-DD format
             document.getElementById('dailyDate').value = dateString;
             
-            // ตั้งเดือนและปีปัจจุบันตามเวลาไทย
-            const thaiTime = new Date(today.getTime() + (7 * 60 * 60 * 1000));
-            document.getElementById('monthSelect').value = thaiTime.getMonth() + 1;
+            // ตั้งเดือนและปีปัจจุบันตามเวลาไทย  
+            const thaiMonth = today.toLocaleDateString('th-TH', { 
+                month: 'numeric', 
+                timeZone: 'Asia/Bangkok' 
+            });
+            const thaiYear = today.toLocaleDateString('th-TH', { 
+                year: 'numeric', 
+                timeZone: 'Asia/Bangkok' 
+            });
+            
+            document.getElementById('monthSelect').value = parseInt(thaiMonth);
             
             // สร้างรายการปี
             const yearSelect = document.getElementById('yearSelect');
-            const currentYear = thaiTime.getFullYear();
+            const currentYear = parseInt(thaiYear);
             for (let year = currentYear; year >= currentYear - 5; year--) {
                 const option = document.createElement('option');
                 option.value = year;
@@ -1102,26 +1330,28 @@
             }
             
             // ตั้งช่วงวันที่ (สัปดาห์นี้) ตามเวลาไทย
-            const startOfWeek = new Date(thaiTime);
-            startOfWeek.setDate(thaiTime.getDate() - thaiTime.getDay());
+            const startOfWeek = new Date(dateString);
+            const dayOfWeek = startOfWeek.getDay();
+            startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
+            
             const endOfWeek = new Date(startOfWeek);
             endOfWeek.setDate(startOfWeek.getDate() + 6);
             
             document.getElementById('startDate').value = startOfWeek.toISOString().split('T')[0];
             document.getElementById('endDate').value = endOfWeek.toISOString().split('T')[0];
-        }
-          // ฟังก์ชันอัปเดตเวลาปัจจุบัน
+        }          // ฟังก์ชันอัปเดตเวลาปัจจุบัน
         function updateCurrentTime() {
             const now = new Date();
-            // แสดงเวลาไทย
-            const thaiTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
-            const timeString = thaiTime.toLocaleTimeString('th-TH', {
+            
+            // ใช้ timezone Bangkok โดยตรง ไม่ต้องบวก 7 ชั่วโมงด้วยตัวเอง
+            const timeString = now.toLocaleTimeString('th-TH', {
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
                 timeZone: 'Asia/Bangkok'
             });
-            const dateString = thaiTime.toLocaleDateString('th-TH', {
+            
+            const dateString = now.toLocaleDateString('th-TH', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',

@@ -398,25 +398,53 @@ class GoogleSheetsService {
       ]);
 
       const totalEmployees = employees.length;
-      const workingNow = onWorkRows.length;      // หาจำนวนคนที่มาทำงานวันนี้ (ใช้เวลาไทย)
+      const workingNow = onWorkRows.length;      // หาจำนวนคนที่มาทำงานวันนี้ (ใช้ข้อมูลจาก ON_WORK sheet ที่มีวันที่วันนี้)
       const today = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
-      const presentToday = mainRows.filter(row => {
+      console.log(`📅 Today date for comparison: ${today}`);
+      console.log(`📊 Total MAIN sheet records: ${mainRows.length}`);
+      console.log(`� Total ON_WORK sheet records: ${onWorkRows.length}`);
+      
+      // นับจาก ON_WORK sheet ที่มีวันที่วันนี้
+      const presentToday = onWorkRows.filter(row => {
         const clockInDate = row.get('เวลาเข้า');
         if (!clockInDate) return false;
         
         try {
+          const employeeName = row.get('ชื่อพนักงาน') || row.get('ชื่อในระบบ');
+          let dateStr = '';
+          
           // ถ้าเป็น string format 'YYYY-MM-DD HH:mm:ss'
           if (typeof clockInDate === 'string' && clockInDate.includes(' ')) {
-            const dateStr = clockInDate.split(' ')[0];
-            return dateStr === today;
+            dateStr = clockInDate.split(' ')[0];
+            const isToday = dateStr === today;
+            
+            if (isToday) {
+              console.log(`✅ Present today (ON_WORK): ${employeeName} - ${clockInDate} (date: ${dateStr})`);
+            }
+            
+            return isToday;
           }
-          // ถ้าเป็น Date object
-          const date = moment(clockInDate).tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
-          return date === today;
-        } catch {
+          
+          // ถ้าเป็น ISO format
+          if (typeof clockInDate === 'string' && clockInDate.includes('T')) {
+            dateStr = clockInDate.split('T')[0];
+            const isToday = dateStr === today;
+            
+            if (isToday) {
+              console.log(`✅ Present today (ON_WORK ISO): ${employeeName} - ${clockInDate} (date: ${dateStr})`);
+            }
+            
+            return isToday;
+          }
+          
+          return false;
+        } catch (error) {
+          console.warn(`⚠️ Error parsing date in ON_WORK: ${clockInDate}`, error);
           return false;
         }
       }).length;
+      
+      console.log(`📊 Present today count: ${presentToday} out of ${onWorkRows.length} ON_WORK records`);
 
       const absentToday = totalEmployees - presentToday;      // รายชื่อพนักงานที่กำลังทำงาน
       const workingEmployees = onWorkRows.map(row => {
@@ -425,36 +453,66 @@ class GoogleSheetsService {
         
         if (clockInTime) {
           try {
-            // แปลงเวลาเข้างานให้เป็น Date object ที่ถูกต้อง
-            let clockIn;
+            // Debug: แสดงข้อมูลเวลาที่ได้รับ
+            console.log(`🕐 Processing clockInTime: "${clockInTime}" (type: ${typeof clockInTime})`);
+            
+            // ใช้ moment เพื่อจัดการ timezone อย่างถูกต้อง
+            let clockInMoment;
+            
             if (typeof clockInTime === 'string') {
-              clockIn = moment(clockInTime).tz(CONFIG.TIMEZONE).toDate();
+              // ระบุ format ให้ชัดเจน และ parse ใน timezone ไทยตั้งแต่แรก
+              clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE);
             } else {
-              clockIn = new Date(clockInTime);
+              // ถ้าเป็น Date object ให้แปลงเป็น moment ใน timezone ไทย
+              clockInMoment = moment(clockInTime).tz(CONFIG.TIMEZONE);
             }
             
-            const now = moment().tz(CONFIG.TIMEZONE).toDate();
-            const hours = (now - clockIn) / (1000 * 60 * 60);
-            workingHours = `${hours.toFixed(1)} ชม.`;
+            // เวลาปัจจุบันใน timezone ไทย
+            const nowMoment = moment().tz(CONFIG.TIMEZONE);
+            
+            // คำนวณความแตกต่างของเวลาในหน่วยชั่วโมง
+            const hours = nowMoment.diff(clockInMoment, 'hours', true);
+            
+            // Debug: แสดงการคำนวณ
+            console.log(`⏰ Time calculation:`, {
+              clockIn: clockInMoment.format('YYYY-MM-DD HH:mm:ss'),
+              now: nowMoment.format('YYYY-MM-DD HH:mm:ss'),
+              diffHours: hours.toFixed(2)
+            });
+            
+            // ตรวจสอบให้แน่ใจว่าไม่เป็นลบ (ป้องกันปัญหา timezone)
+            if (hours >= 0) {
+              workingHours = `${hours.toFixed(1)} ชม.`;
+            } else {
+              console.warn(`⚠️ Negative working hours detected: ${hours.toFixed(2)}, setting to 0`);
+              workingHours = '0 ชม.';
+            }
           } catch (error) {
             console.error('Error calculating working hours:', error);
+            workingHours = '0 ชม.';
           }
-        }
-
-        return {
+        }        return {
           name: row.get('ชื่อพนักงาน') || row.get('ชื่อในระบบ'),
-          clockIn: clockInTime, // ส่งเวลาต้นฉบับไป ให้ฝั่ง client จัดการการแสดงผล
+          clockIn: clockInTime ? moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE).format('HH:mm') : '', // ส่งเฉพาะเวลา HH:mm
           workingHours
         };
-      });
-
-      return {
+      });      const stats = {
         totalEmployees,
         presentToday,
         workingNow,
         absentToday,
         workingEmployees
       };
+      
+      console.log('📊 Admin stats summary:', {
+        totalEmployees,
+        presentToday,
+        workingNow,
+        absentToday,
+        workingEmployeesCount: workingEmployees.length
+      });
+      
+      return stats;
 
     } catch (error) {
       console.error('Error getting admin stats:', error);
