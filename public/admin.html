@@ -1087,8 +1087,7 @@
             }
             
             await downloadReport('daily', { date });
-        }
-          async function exportMonthly() {
+        }          async function exportMonthly() {
             const month = document.getElementById('monthSelect').value;
             const year = document.getElementById('yearSelect').value;
             const format = document.getElementById('reportFormat').value;
@@ -1099,6 +1098,92 @@
             } else {
                 // ใช้รายงานสรุปแบบเดิม
                 await downloadReport('monthly', { month, year });
+            }
+        }
+        
+        // ฟังก์ชันสำหรับดาวน์โหลดรายงานรายเดือนแบบละเอียด
+        async function downloadDetailedMonthlyReport(month, year) {
+            try {
+                // แสดง loading
+                Swal.fire({
+                    title: 'กำลังสร้างรายงานแบบละเอียด...',
+                    html: 'โปรดรอสักครู่ กำลังสร้างรายงานที่แสดงแต่ละวันชัดเจน',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                const token = localStorage.getItem('adminToken');
+                
+                const response = await fetch(`${API_BASE_URL}/reports/export-monthly-detailed`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        month: parseInt(month),
+                        year: parseInt(year),
+                        options: {
+                            showDailyBreakdown: true,
+                            showWeekends: true,
+                            showSummary: true,
+                            colorCoding: true
+                        }
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to generate detailed report');
+                }
+                
+                // ดาวน์โหลดไฟล์
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                // ตั้งชื่อไฟล์
+                const monthNames = [
+                    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+                ];
+                const filename = `รายงานรายเดือน_${monthNames[month-1]}_${parseInt(year)+543}_แบ่งวันชัดเจน.xlsx`;
+                a.download = filename;
+                
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'สร้างรายงานสำเร็จ!',
+                    html: `
+                        <div style="text-align: left;">
+                            <p><strong>รายงานที่สร้าง:</strong> รายงานรายเดือนแบบละเอียด</p>
+                            <p><strong>รูปแบบ:</strong> แสดงแต่ละวันของเดือนอย่างชัดเจน</p>
+                            <p><strong>คุณสมบัติ:</strong></p>
+                            <ul>
+                                <li>แสดงข้อมูลทุกวันในเดือน</li>
+                                <li>ใช้สีแยกแยะสถานะ (เข้างาน, ขาด, ลา)</li>
+                                <li>แสดงเวลาที่มาสาย</li>
+                                <li>รวมสรุปจำนวนวันต่างๆ</li>
+                            </ul>
+                        </div>
+                    `,
+                    timer: 5000,
+                    showConfirmButton: true
+                });
+                
+            } catch (error) {
+                console.error('Export error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: 'ไม่สามารถสร้างรายงานได้ กรุณาลองใหม่อีกครั้ง'
+                });
             }
         }
         
