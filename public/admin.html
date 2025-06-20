@@ -426,9 +426,9 @@
                 </button>
                 <h4 class="page-title" id="pageTitle">หน้าหลัก</h4>
             </div>
-            
-            <div class="header-right">
+              <div class="header-right">
                 <div class="user-info">
+                    <small id="currentTime" style="margin-right: 15px; color: #6c757d;"></small>
                     <div class="user-avatar" id="userAvatar">A</div>
                     <span id="userName">ผู้ดูแลระบบ</span>
                 </div>
@@ -712,8 +712,7 @@
                 showSection(section);
             });
         });
-        
-        // โหลดข้อมูลสถิติ
+          // โหลดข้อมูลสถิติ
         async function loadStats() {
             try {
                 const token = localStorage.getItem('adminToken');
@@ -736,6 +735,12 @@
                     document.getElementById('workingNow').textContent = stats.workingNow || 0;
                     document.getElementById('absentToday').textContent = stats.absentToday || 0;
                     
+                    // Debug: แสดงข้อมูลที่ได้รับจาก server
+                    console.log('📊 Stats data from server:', stats);
+                    if (stats.workingEmployees) {
+                        console.log('👥 Working employees raw data:', stats.workingEmployees);
+                    }
+                    
                     // โหลดรายชื่อพนักงานที่กำลังทำงาน
                     loadWorkingEmployees(stats.workingEmployees || []);
                 }
@@ -745,7 +750,69 @@
             }
         }
         
-        // โหลดรายชื่อพนักงานที่กำลังทำงาน
+        // ฟังก์ชันจัดการเวลาให้แสดงเป็นเวลาไทย
+        function formatThaiTime(timeString) {
+            if (!timeString) return '';
+            
+            try {
+                // ถ้าเป็นเวลาที่มาจาก server แล้วเป็น string
+                if (typeof timeString === 'string') {
+                    // ถ้าเป็นรูปแบบ 'YYYY-MM-DD HH:mm:ss' (จาก moment)
+                    if (timeString.includes(' ') && timeString.length === 19) {
+                        const timePart = timeString.split(' ')[1];
+                        return timePart;
+                    }
+                    // ถ้ามี ' น.' ต่อท้ายอยู่แล้ว
+                    if (timeString.includes(' น.')) {
+                        return timeString;
+                    }
+                    // ลองแปลงเป็น Date object
+                    const date = new Date(timeString);
+                    if (!isNaN(date.getTime())) {
+                        return date.toLocaleTimeString('th-TH', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'Asia/Bangkok'
+                        });
+                    }
+                }
+                
+                // ถ้าเป็น Date object
+                if (timeString instanceof Date) {
+                    return timeString.toLocaleTimeString('th-TH', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: 'Asia/Bangkok'
+                    });
+                }
+                
+                return timeString;
+            } catch (error) {
+                console.error('Error formatting time:', error);
+                return timeString;
+            }
+        }
+
+        // ฟังก์ชันจัดการวันที่เป็นไทย
+        function formatThaiDate(dateString) {
+            if (!dateString) return '';
+            
+            try {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) return dateString;
+                
+                return date.toLocaleDateString('th-TH', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    timeZone: 'Asia/Bangkok'
+                });
+            } catch (error) {
+                console.error('Error formatting date:', error);
+                return dateString;
+            }
+        }
+          // โหลดรายชื่อพนักงานที่กำลังทำงาน
         function loadWorkingEmployees(employees) {
             const container = document.getElementById('workingEmployeesList');
             
@@ -759,21 +826,33 @@
                 return;
             }
             
-            const html = employees.map(emp => `
-                <div class="employee-item">
-                    <div class="employee-info">
-                        <div class="employee-name">${emp.name}</div>
-                        <div class="employee-time">
-                            <i class="fas fa-clock"></i>
-                            เข้างาน: ${emp.clockIn} | ทำงานแล้ว: ${emp.workingHours}
+            const html = employees.map(emp => {
+                // จัดการเวลาให้แสดงถูกต้อง
+                const clockInTime = formatThaiTime(emp.clockIn);
+                
+                // Debug: แสดงข้อมูลเวลาที่ได้รับ
+                console.log(`👤 ${emp.name}:`, {
+                    original: emp.clockIn,
+                    formatted: clockInTime,
+                    workingHours: emp.workingHours
+                });
+                
+                return `
+                    <div class="employee-item">
+                        <div class="employee-info">
+                            <div class="employee-name">${emp.name}</div>
+                            <div class="employee-time">
+                                <i class="fas fa-clock"></i>
+                                เข้างาน: ${clockInTime} | ทำงานแล้ว: ${emp.workingHours}
+                            </div>
+                        </div>
+                        <div class="status-badge">
+                            <i class="fas fa-circle"></i>
+                            ทำงาน
                         </div>
                     </div>
-                    <div class="status-badge">
-                        <i class="fas fa-circle"></i>
-                        ทำงาน
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
             
             container.innerHTML = html;
         }
@@ -998,20 +1077,22 @@
                 }
             });
         }
-        
-        // เตรียมข้อมูลเริ่มต้น
+          // เตรียมข้อมูลเริ่มต้น
         function initializePage() {
-            // ตั้งวันที่เริ่มต้น
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('dailyDate').value = today;
+            // ตั้งวันที่เริ่มต้นให้เป็นเวลาไทย
+            const today = new Date();
+            // แปลงเป็นเวลาไทยสำหรับ input date
+            const thaiDate = new Date(today.getTime() + (7 * 60 * 60 * 1000)); // +7 hours for Thailand timezone
+            const dateString = thaiDate.toISOString().split('T')[0];
+            document.getElementById('dailyDate').value = dateString;
             
-            // ตั้งเดือนและปีปัจจุบัน
-            const now = new Date();
-            document.getElementById('monthSelect').value = now.getMonth() + 1;
+            // ตั้งเดือนและปีปัจจุบันตามเวลาไทย
+            const thaiTime = new Date(today.getTime() + (7 * 60 * 60 * 1000));
+            document.getElementById('monthSelect').value = thaiTime.getMonth() + 1;
             
             // สร้างรายการปี
             const yearSelect = document.getElementById('yearSelect');
-            const currentYear = now.getFullYear();
+            const currentYear = thaiTime.getFullYear();
             for (let year = currentYear; year >= currentYear - 5; year--) {
                 const option = document.createElement('option');
                 option.value = year;
@@ -1020,24 +1101,52 @@
                 yearSelect.appendChild(option);
             }
             
-            // ตั้งช่วงวันที่ (สัปดาห์นี้)
-            const startOfWeek = new Date(now);
-            startOfWeek.setDate(now.getDate() - now.getDay());
+            // ตั้งช่วงวันที่ (สัปดาห์นี้) ตามเวลาไทย
+            const startOfWeek = new Date(thaiTime);
+            startOfWeek.setDate(thaiTime.getDate() - thaiTime.getDay());
             const endOfWeek = new Date(startOfWeek);
             endOfWeek.setDate(startOfWeek.getDate() + 6);
             
             document.getElementById('startDate').value = startOfWeek.toISOString().split('T')[0];
             document.getElementById('endDate').value = endOfWeek.toISOString().split('T')[0];
         }
+          // ฟังก์ชันอัปเดตเวลาปัจจุบัน
+        function updateCurrentTime() {
+            const now = new Date();
+            // แสดงเวลาไทย
+            const thaiTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+            const timeString = thaiTime.toLocaleTimeString('th-TH', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZone: 'Asia/Bangkok'
+            });
+            const dateString = thaiTime.toLocaleDateString('th-TH', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'Asia/Bangkok'
+            });
+            
+            const timeElement = document.getElementById('currentTime');
+            if (timeElement) {
+                timeElement.innerHTML = `<i class="fas fa-clock"></i> ${dateString} ${timeString}`;
+            }
+        }
+
+        // ...existing code...
         
         // เริ่มต้นเมื่อโหลดหน้า
         document.addEventListener('DOMContentLoaded', function() {
             if (checkAuth()) {
                 initializePage();
                 loadStats();
+                updateCurrentTime();
                 
                 // รีเฟรชข้อมูลทุก 30 วินาที
                 setInterval(loadStats, 30000);
+                // อัปเดตเวลาทุกวินาที
+                setInterval(updateCurrentTime, 1000);
             }
         });
     </script>

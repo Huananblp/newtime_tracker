@@ -398,33 +398,42 @@ class GoogleSheetsService {
       ]);
 
       const totalEmployees = employees.length;
-      const workingNow = onWorkRows.length;
-
-      // หาจำนวนคนที่มาทำงานวันนี้
-      const today = new Date().toLocaleDateString('th-TH');
+      const workingNow = onWorkRows.length;      // หาจำนวนคนที่มาทำงานวันนี้ (ใช้เวลาไทย)
+      const today = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
       const presentToday = mainRows.filter(row => {
         const clockInDate = row.get('เวลาเข้า');
         if (!clockInDate) return false;
         
         try {
-          const date = new Date(clockInDate).toLocaleDateString('th-TH');
+          // ถ้าเป็น string format 'YYYY-MM-DD HH:mm:ss'
+          if (typeof clockInDate === 'string' && clockInDate.includes(' ')) {
+            const dateStr = clockInDate.split(' ')[0];
+            return dateStr === today;
+          }
+          // ถ้าเป็น Date object
+          const date = moment(clockInDate).tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
           return date === today;
         } catch {
           return false;
         }
       }).length;
 
-      const absentToday = totalEmployees - presentToday;
-
-      // รายชื่อพนักงานที่กำลังทำงาน
+      const absentToday = totalEmployees - presentToday;      // รายชื่อพนักงานที่กำลังทำงาน
       const workingEmployees = onWorkRows.map(row => {
         const clockInTime = row.get('เวลาเข้า');
         let workingHours = '0 ชม.';
         
         if (clockInTime) {
           try {
-            const clockIn = new Date(clockInTime);
-            const now = new Date();
+            // แปลงเวลาเข้างานให้เป็น Date object ที่ถูกต้อง
+            let clockIn;
+            if (typeof clockInTime === 'string') {
+              clockIn = moment(clockInTime).tz(CONFIG.TIMEZONE).toDate();
+            } else {
+              clockIn = new Date(clockInTime);
+            }
+            
+            const now = moment().tz(CONFIG.TIMEZONE).toDate();
             const hours = (now - clockIn) / (1000 * 60 * 60);
             workingHours = `${hours.toFixed(1)} ชม.`;
           } catch (error) {
@@ -434,7 +443,7 @@ class GoogleSheetsService {
 
         return {
           name: row.get('ชื่อพนักงาน') || row.get('ชื่อในระบบ'),
-          clockIn: this.formatTime(new Date(clockInTime)),
+          clockIn: clockInTime, // ส่งเวลาต้นฉบับไป ให้ฝั่ง client จัดการการแสดงผล
           workingHours
         };
       });
@@ -458,18 +467,22 @@ class GoogleSheetsService {
       const mainSheet = await this.getSheet(CONFIG.SHEETS.MAIN);
       const rows = await mainSheet.getRows();
 
-      let filteredRows = [];
-
-      switch (type) {
+      let filteredRows = [];      switch (type) {
         case 'daily':
-          const targetDate = new Date(params.date);
+          const targetDate = moment(params.date).tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
           filteredRows = rows.filter(row => {
             const clockIn = row.get('เวลาเข้า');
             if (!clockIn) return false;
             
             try {
-              const rowDate = new Date(clockIn);
-              return rowDate.toDateString() === targetDate.toDateString();
+              // ถ้าเป็น string format 'YYYY-MM-DD HH:mm:ss'
+              if (typeof clockIn === 'string' && clockIn.includes(' ')) {
+                const dateStr = clockIn.split(' ')[0];
+                return dateStr === targetDate;
+              }
+              // ถ้าเป็น Date object
+              const rowDate = moment(clockIn).tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
+              return rowDate === targetDate;
             } catch {
               return false;
             }
@@ -485,8 +498,14 @@ class GoogleSheetsService {
             if (!clockIn) return false;
             
             try {
-              const rowDate = new Date(clockIn);
-              return rowDate.getMonth() + 1 === month && rowDate.getFullYear() === year;
+              let rowDate;
+              // ถ้าเป็น string format 'YYYY-MM-DD HH:mm:ss'
+              if (typeof clockIn === 'string' && clockIn.includes(' ')) {
+                rowDate = moment(clockIn).tz(CONFIG.TIMEZONE);
+              } else {
+                rowDate = moment(clockIn).tz(CONFIG.TIMEZONE);
+              }
+              return rowDate.month() + 1 === month && rowDate.year() === year;
             } catch {
               return false;
             }
@@ -494,17 +513,22 @@ class GoogleSheetsService {
           break;
 
         case 'range':
-          const startDate = new Date(params.startDate);
-          const endDate = new Date(params.endDate);
-          endDate.setHours(23, 59, 59, 999); // รวมทั้งวันสุดท้าย
+          const startMoment = moment(params.startDate).tz(CONFIG.TIMEZONE).startOf('day');
+          const endMoment = moment(params.endDate).tz(CONFIG.TIMEZONE).endOf('day');
           
           filteredRows = rows.filter(row => {
             const clockIn = row.get('เวลาเข้า');
             if (!clockIn) return false;
             
             try {
-              const rowDate = new Date(clockIn);
-              return rowDate >= startDate && rowDate <= endDate;
+              let rowMoment;
+              // ถ้าเป็น string format 'YYYY-MM-DD HH:mm:ss'
+              if (typeof clockIn === 'string' && clockIn.includes(' ')) {
+                rowMoment = moment(clockIn).tz(CONFIG.TIMEZONE);
+              } else {
+                rowMoment = moment(clockIn).tz(CONFIG.TIMEZONE);
+              }
+              return rowMoment.isBetween(startMoment, endMoment, null, '[]');
             } catch {
               return false;
             }
@@ -655,14 +679,16 @@ class GoogleSheetsService {
 
       const timestamp = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss'); // ใช้เวลาไทยในรูปแบบ string
       const workRecord = employeeStatus.workRecord;
-      
-      const clockInTime = workRecord.clockIn;
+        const clockInTime = workRecord.clockIn;
       console.log(`⏰ Clock in time: ${clockInTime}`);
-        let hoursWorked = 0;
+      
+      let hoursWorked = 0;
       if (clockInTime) {
-        const clockInDate = new Date(clockInTime);
-        const timestampDate = moment().tz(CONFIG.TIMEZONE).toDate(); // สร้าง Date object สำหรับคำนวณ
-        hoursWorked = (timestampDate - clockInDate) / (1000 * 60 * 60);        console.log(`⏱️ Hours worked: ${hoursWorked.toFixed(2)}`);
+        // ใช้ moment สำหรับการคำนวณเวลาที่แม่นยำ
+        const clockInMoment = moment(clockInTime).tz(CONFIG.TIMEZONE);
+        const timestampMoment = moment().tz(CONFIG.TIMEZONE);
+        hoursWorked = timestampMoment.diff(clockInMoment, 'hours', true); // true = ให้ทศนิยม
+        console.log(`⏱️ Hours worked: ${hoursWorked.toFixed(2)}`);
       }
       
       // แปลงพิกัดเป็นชื่อสถานที่
@@ -840,16 +866,31 @@ class GoogleSheetsService {
       console.error('Error triggering map generation:', error);
     }
   }  formatTime(date) {
-    // รองรับทั้ง Date object และ string
-    if (typeof date === 'string') {
-      return date.split(' ')[1] + ' น.'; // ใช้ส่วนเวลาจาก 'YYYY-MM-DD HH:mm:ss'
+    try {
+      // รองรับทั้ง Date object และ string
+      if (typeof date === 'string') {
+        // ถ้าเป็นรูปแบบ 'YYYY-MM-DD HH:mm:ss' จาก moment
+        if (date.includes(' ') && date.length === 19) {
+          return date.split(' ')[1]; // ใช้ส่วนเวลาเท่านั้น
+        }
+        // ลองแปลงเป็น Date object
+        const parsedDate = moment(date).tz(CONFIG.TIMEZONE);
+        if (parsedDate.isValid()) {
+          return parsedDate.format('HH:mm:ss');
+        }
+        return date; // ถ้าแปลงไม่ได้ ส่งกลับเป็น string เดิม
+      }
+      
+      // ถ้าเป็น Date object
+      if (date instanceof Date && !isNaN(date.getTime())) {
+        return moment(date).tz(CONFIG.TIMEZONE).format('HH:mm:ss');
+      }
+      
+      return '';
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      return date?.toString() || '';
     }
-    return date.toLocaleTimeString('th-TH', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZone: CONFIG.TIMEZONE
-    }) + ' น.';
   }
 
   // เพิ่มฟังก์ชันแปลงพิกัดเป็นชื่อสถานที่
