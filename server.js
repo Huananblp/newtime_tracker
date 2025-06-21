@@ -249,6 +249,14 @@ class GoogleSheetsService {
   constructor() {
     this.doc = null;
     this.isInitialized = false;
+    // เพิ่มระบบ caching เพื่อลดการเรียก API
+    this.cache = {
+      employees: { data: null, timestamp: null, ttl: 300000 }, // 5 นาที
+      onWork: { data: null, timestamp: null, ttl: 60000 }, // 1 นาที  
+      main: { data: null, timestamp: null, ttl: 30000 }, // 30 วินาที
+      stats: { data: null, timestamp: null, ttl: 120000 } // 2 นาที
+    };
+    this.emergencyMode = false; // เริ่มต้นปิดระบบ emergency mode
   }
 
   async initialize() {
@@ -271,6 +279,40 @@ class GoogleSheetsService {
       console.error('❌ Failed to initialize Google Sheets:', error);
       throw error;
     }
+  }  // เพิ่มฟังก์ชัน cache helper
+  isCacheValid(cacheKey) {
+    const cache = this.cache[cacheKey];
+    if (!cache || !cache.data || !cache.timestamp) return false;
+    return (Date.now() - cache.timestamp) < cache.ttl;
+  }
+
+  setCache(cacheKey, data) {
+    if (!this.cache[cacheKey]) {
+      this.cache[cacheKey] = { data: null, timestamp: null, ttl: 300000 }; // default 5 min
+    }
+    this.cache[cacheKey] = {
+      data: data,
+      timestamp: Date.now(),
+      ttl: this.cache[cacheKey].ttl
+    };
+  }
+
+  getCache(cacheKey) {
+    const cache = this.cache[cacheKey];
+    return cache && cache.data ? cache.data : null;
+  }
+
+  clearCache(cacheKey = null) {
+    if (cacheKey) {
+      this.cache[cacheKey].data = null;
+      this.cache[cacheKey].timestamp = null;
+    } else {
+      // Clear all cache
+      Object.keys(this.cache).forEach(key => {
+        this.cache[key].data = null;
+        this.cache[key].timestamp = null;
+      });
+    }
   }
 
   async getSheet(sheetName) {
@@ -284,6 +326,59 @@ class GoogleSheetsService {
     }
     
     return sheet;
+  }  // เพิ่มฟังก์ชันดึงข้อมูลพร้อม cache และ rate limiting
+  async getCachedSheetData(sheetName) {
+    const cacheKey = sheetName.toLowerCase().replace(/\s+/g, '');
+    
+    // ตรวจสอบ cache ก่อน
+    if (this.isCacheValid(cacheKey)) {
+      console.log(`📋 Using cached data for ${sheetName}`);
+      return this.getCache(cacheKey);
+    }
+
+    // ตรวจสอบ rate limit ก่อนเรียก API
+    if (!apiMonitor.canMakeAPICall()) {
+      console.warn(`⚠️ API rate limit reached, using stale cache for ${sheetName}`);
+      const staleData = this.getCache(cacheKey);
+      if (staleData) {
+        return staleData;
+      }
+      throw new Error('Rate limit exceeded and no cached data available');
+    }
+
+    console.log(`🔄 Fetching fresh data from ${sheetName}`);
+    apiMonitor.logAPICall(`getCachedSheetData:${sheetName}`);
+    
+    try {
+      const sheet = await this.getSheet(sheetName);
+      
+      let rows;
+      if (sheetName === CONFIG.SHEETS.ON_WORK) {
+        rows = await sheet.getRows({ offset: 1 }); // เริ่มจากแถว 3
+      } else {
+        rows = await sheet.getRows();
+      }
+
+      // บันทึกลง cache
+      this.setCache(cacheKey, rows);
+      return rows;
+      
+    } catch (error) {
+      console.error(`❌ API Error for ${sheetName}:`, error.message);
+      
+      // ถ้าเป็น quota error, ใช้ stale cache
+      if (error.message.includes('quota') || error.message.includes('limit') || 
+          error.message.includes('429') || error.message.includes('RATE_LIMIT')) {
+        console.warn(`⚠️ Quota exceeded for ${sheetName}, using stale cache`);
+        const staleData = this.getCache(cacheKey);
+        if (staleData) {
+          console.log(`📋 Using stale cache for ${sheetName} (${staleData.length} items)`);
+          return staleData;
+        }
+      }
+      
+      throw error;
+    }
   }
 
   // ฟังก์ชันช่วยเหลือสำหรับการเปรียบเทียบชื่อ
@@ -306,11 +401,10 @@ class GoogleSheetsService {
            normalizedInput.includes(normalizedCompare) ||
            normalizedCompare.includes(normalizedInput);
   }
-
   async getEmployees() {
     try {
-      const sheet = await this.getSheet(CONFIG.SHEETS.EMPLOYEES);
-      const rows = await sheet.getRows();
+      // ใช้ cached data แทนการเรียก API ใหม่
+      const rows = await this.getCachedSheetData(CONFIG.SHEETS.EMPLOYEES);
       
       const employees = rows.map(row => row.get('ชื่อ-นามสกุล')).filter(name => name);
       return employees;
@@ -319,11 +413,10 @@ class GoogleSheetsService {
       console.error('Error getting employees:', error);
       return [];
     }
-  }
-  async getEmployeeStatus(employeeName) {
+  }  async getEmployeeStatus(employeeName) {
     try {
-      const sheet = await this.getSheet(CONFIG.SHEETS.ON_WORK);
-      const rows = await sheet.getRows({ offset: 1 }); // เริ่มจากแถว 3 (ข้ามแถว 2 ที่เป็นข้อความอธิบาย)
+      // ใช้ safe method แทน
+      const rows = await this.safeGetCachedSheetData(CONFIG.SHEETS.ON_WORK);
       
       console.log(`🔍 Checking status for: "${employeeName}"`);
       console.log(`📊 Total rows in ON_WORK (from row 3): ${rows.length}`);
@@ -384,132 +477,150 @@ class GoogleSheetsService {
   // Admin functions
   async getAdminStats() {
     try {
-      console.log('📊 Getting admin stats...');
-      
-      const [employeesSheet, onWorkSheet, mainSheet] = await Promise.all([
-        this.getSheet(CONFIG.SHEETS.EMPLOYEES),
-        this.getSheet(CONFIG.SHEETS.ON_WORK),
-        this.getSheet(CONFIG.SHEETS.MAIN)
-      ]);
+      // ตรวจสอบ cache สำหรับ stats ก่อน
+      if (this.isCacheValid('stats')) {
+        console.log('📊 Using cached admin stats');
+        return this.getCache('stats');
+      }
 
+      console.log('🔄 Fetching fresh admin stats data');      // ใช้ safe method แทน การเรียก API
       const [employees, onWorkRows, mainRows] = await Promise.all([
-        employeesSheet.getRows(),
-        onWorkSheet.getRows({ offset: 1 }), // เริ่มจากแถว 3
-        mainSheet.getRows()
+        this.safeGetCachedSheetData(CONFIG.SHEETS.EMPLOYEES),
+        this.safeGetCachedSheetData(CONFIG.SHEETS.ON_WORK),
+        this.safeGetCachedSheetData(CONFIG.SHEETS.MAIN)
       ]);
-
-      console.log(`📋 Data counts:`, {
-        employees: employees.length,
-        mainRows: mainRows.length,
-        onWorkRows: onWorkRows.length
-      });
 
       const totalEmployees = employees.length;
-      const workingNow = onWorkRows.length;// หาจำนวนคนที่มาทำงานวันนี้ (ใช้เวลาไทย)
+      const workingNow = onWorkRows.length;// หาจำนวนคนที่มาทำงานวันนี้ (ใช้ข้อมูลจาก ON_WORK sheet ที่มีวันที่วันนี้)
       const today = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
-      console.log(`📅 Today (Thai time): ${today}`);
-        const presentToday = mainRows.filter(row => {
+      console.log(`📅 Today date for comparison: ${today}`);
+      console.log(`📊 Total MAIN sheet records: ${mainRows.length}`);
+      console.log(`� Total ON_WORK sheet records: ${onWorkRows.length}`);
+      
+      // นับจาก ON_WORK sheet ที่มีวันที่วันนี้
+      const presentToday = onWorkRows.filter(row => {
         const clockInDate = row.get('เวลาเข้า');
         if (!clockInDate) return false;
         
         try {
-          let dateToCompare = '';
+          const employeeName = row.get('ชื่อพนักงาน') || row.get('ชื่อในระบบ');
+          let dateStr = '';
           
-          // ถ้าเป็น string format 'YYYY-MM-DD HH:mm:ss' (จาก moment)
-          if (typeof clockInDate === 'string' && clockInDate.includes(' ') && clockInDate.length >= 10) {
-            dateToCompare = clockInDate.substring(0, 10); // เอาแค่ส่วน YYYY-MM-DD
-          } else {
-            // ถ้าเป็น Date object หรือ string อื่นๆ ให้แปลงเป็น moment
-            const momentDate = moment(clockInDate);
-            if (momentDate.isValid()) {
-              dateToCompare = momentDate.tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
+          // ถ้าเป็น string format 'YYYY-MM-DD HH:mm:ss'
+          if (typeof clockInDate === 'string' && clockInDate.includes(' ')) {
+            dateStr = clockInDate.split(' ')[0];
+            const isToday = dateStr === today;
+            
+            if (isToday) {
+              console.log(`✅ Present today (ON_WORK): ${employeeName} - ${clockInDate} (date: ${dateStr})`);
             }
+            
+            return isToday;
           }
           
-          const isToday = dateToCompare === today;
-          if (isToday) {
-            console.log(`✅ Found today's entry:`, {
-              employee: row.get('ชื่อพนักงาน'),
-              clockIn: clockInDate,
-              dateCompare: dateToCompare
-            });
+          // ถ้าเป็น ISO format
+          if (typeof clockInDate === 'string' && clockInDate.includes('T')) {
+            dateStr = clockInDate.split('T')[0];
+            const isToday = dateStr === today;
+            
+            if (isToday) {
+              console.log(`✅ Present today (ON_WORK ISO): ${employeeName} - ${clockInDate} (date: ${dateStr})`);
+            }
+            
+            return isToday;
           }
           
-          return isToday;
+          return false;
         } catch (error) {
-          console.error('Error parsing date:', clockInDate, error);
+          console.warn(`⚠️ Error parsing date in ON_WORK: ${clockInDate}`, error);
           return false;
         }
       }).length;
       
-      console.log(`👥 Present today: ${presentToday}/${totalEmployees}`);
+      console.log(`📊 Present today count: ${presentToday} out of ${onWorkRows.length} ON_WORK records`);
 
       const absentToday = totalEmployees - presentToday;      // รายชื่อพนักงานที่กำลังทำงาน
-      console.log(`👥 Processing ${onWorkRows.length} working employees...`);
-      
-      const workingEmployees = onWorkRows.map((row, index) => {
+      const workingEmployees = onWorkRows.map(row => {
         const clockInTime = row.get('เวลาเข้า');
-        const employeeName = row.get('ชื่อพนักงาน') || row.get('ชื่อในระบบ');
-        let workingHours = '0.0 ชม.';
-        
-        console.log(`👤 Processing employee ${index + 1}:`, {
-          name: employeeName,
-          clockInRaw: clockInTime,
-          clockInType: typeof clockInTime
-        });
+        let workingHours = '0 ชม.';
         
         if (clockInTime) {
           try {
-            // ใช้ moment สำหรับการคำนวณที่แม่นยำ
-            const clockInMoment = moment(clockInTime).tz(CONFIG.TIMEZONE);
+            // Debug: แสดงข้อมูลเวลาที่ได้รับ
+            console.log(`🕐 Processing clockInTime: "${clockInTime}" (type: ${typeof clockInTime})`);
+            
+            // ใช้ moment เพื่อจัดการ timezone อย่างถูกต้อง
+            let clockInMoment;
+            
+            if (typeof clockInTime === 'string') {
+              // ระบุ format ให้ชัดเจน และ parse ใน timezone ไทยตั้งแต่แรก
+              clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE);
+            } else {
+              // ถ้าเป็น Date object ให้แปลงเป็น moment ใน timezone ไทย
+              clockInMoment = moment(clockInTime).tz(CONFIG.TIMEZONE);
+            }
+            
+            // เวลาปัจจุบันใน timezone ไทย
             const nowMoment = moment().tz(CONFIG.TIMEZONE);
             
-            if (clockInMoment.isValid()) {
-              const minutes = nowMoment.diff(clockInMoment, 'minutes');
-              const hours = minutes / 60;
+            // คำนวณความแตกต่างของเวลาในหน่วยชั่วโมง
+            const hours = nowMoment.diff(clockInMoment, 'hours', true);
+            
+            // Debug: แสดงการคำนวณ
+            console.log(`⏰ Time calculation:`, {
+              clockIn: clockInMoment.format('YYYY-MM-DD HH:mm:ss'),
+              now: nowMoment.format('YYYY-MM-DD HH:mm:ss'),
+              diffHours: hours.toFixed(2)
+            });
+            
+            // ตรวจสอบให้แน่ใจว่าไม่เป็นลบ (ป้องกันปัญหา timezone)
+            if (hours >= 0) {
               workingHours = `${hours.toFixed(1)} ชม.`;
-              
-              console.log(`⏰ Working hours calculation for ${employeeName}:`, {
-                clockIn: clockInMoment.format('YYYY-MM-DD HH:mm:ss'),
-                now: nowMoment.format('YYYY-MM-DD HH:mm:ss'),
-                minutes,
-                hours: hours.toFixed(1)
-              });
             } else {
-              console.warn(`⚠️ Invalid clock in time for ${employeeName}:`, clockInTime);
+              console.warn(`⚠️ Negative working hours detected: ${hours.toFixed(2)}, setting to 0`);
+              workingHours = '0 ชม.';
             }
           } catch (error) {
-            console.error(`❌ Error calculating working hours for ${employeeName}:`, error);
+            console.error('Error calculating working hours:', error);
+            workingHours = '0 ชม.';
           }
-        }
-
-        return {
-          name: employeeName,
-          clockIn: clockInTime, // ส่งเวลาต้นฉบับไป ให้ฝั่ง client จัดการการแสดงผล
+        }        return {
+          name: row.get('ชื่อพนักงาน') || row.get('ชื่อในระบบ'),
+          clockIn: clockInTime ? moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE).format('HH:mm') : '', // ส่งเฉพาะเวลา HH:mm
           workingHours
         };
-      });
-
-      return {
+      });      const stats = {
         totalEmployees,
         presentToday,
         workingNow,
         absentToday,
         workingEmployees
       };
+      
+      console.log('📊 Admin stats summary:', {
+        totalEmployees,
+        presentToday,
+        workingNow,
+        absentToday,
+        workingEmployeesCount: workingEmployees.length
+      });
+      
+      // บันทึกลง cache
+      this.setCache('stats', stats);
+      
+      return stats;
 
     } catch (error) {
       console.error('Error getting admin stats:', error);
       throw error;
     }
   }
-
   async getReportData(type, params) {
     try {
-      const mainSheet = await this.getSheet(CONFIG.SHEETS.MAIN);
-      const rows = await mainSheet.getRows();
+      // ใช้ cached data แทนการเรียก API ใหม่
+      const rows = await this.getCachedSheetData(CONFIG.SHEETS.MAIN);
 
-      let filteredRows = [];      switch (type) {
+      let filteredRows = [];switch (type) {
         case 'daily':
           const targetDate = moment(params.date).tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
           filteredRows = rows.filter(row => {
@@ -595,10 +706,8 @@ class GoogleSheetsService {
     } catch (error) {
       console.error('Error getting report data:', error);
       throw error;
-    }
-  }
+    }  }
 
-  // [Previous clockIn and clockOut methods remain the same...]
   async clockIn(data) {
     try {
       const { employee, userinfo, lat, lon, line_name, line_picture } = data;
@@ -614,7 +723,11 @@ class GoogleSheetsService {
           message: 'คุณลงเวลาเข้างานไปแล้ว กรุณาลงเวลาออกก่อน',
           employee,
           currentStatus: 'clocked_in',
-          clockInTime: employeeStatus.workRecord?.clockIn        };      }      const timestamp = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss'); // ใช้เวลาไทยในรูปแบบ string
+          clockInTime: employeeStatus.workRecord?.clockIn
+        };
+      }
+
+      const timestamp = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
       
       // แปลงพิกัดเป็นชื่อสถานที่
       const locationName = await this.getLocationName(lat, lon);
@@ -632,14 +745,16 @@ class GoogleSheetsService {
         userinfo || '',     
         '',                 
         `${lat},${lon}`,    
-        locationName,       // ใช้ชื่อสถานที่แทนพิกัด
+        locationName,       
         '',                 
         '',                 
         ''                  
       ]);
 
       const mainRowIndex = newRow.rowNumber;
-      console.log(`✅ Added to MAIN sheet at row: ${mainRowIndex}`);      const onWorkSheet = await this.getSheet(CONFIG.SHEETS.ON_WORK);
+      console.log(`✅ Added to MAIN sheet at row: ${mainRowIndex}`);
+
+      const onWorkSheet = await this.getSheet(CONFIG.SHEETS.ON_WORK);
       await onWorkSheet.addRow([
         timestamp,          
         employee,           
@@ -647,15 +762,28 @@ class GoogleSheetsService {
         'ทำงาน',           
         userinfo || '',     
         `${lat},${lon}`,    
-        locationName,       // ใช้ชื่อสถานที่แทนพิกัด
+        locationName,       
         mainRowIndex,       
         line_name,          
         line_picture,       
         mainRowIndex,       
         employee            
-      ]);
+      ]);      // Clear cache เนื่องจากมีการเพิ่มข้อมูลใหม่
+      this.clearCache('onwork');
+      this.clearCache('main');
+      this.clearCache('stats');
 
       console.log(`✅ Clock In successful: ${employee} at ${this.formatTime(timestamp)}, Main row: ${mainRowIndex}`);
+
+      // ทำการ warm cache อัตโนมัติ
+      setTimeout(async () => {
+        try {
+          await this.getCachedSheetData(CONFIG.SHEETS.ON_WORK);
+          await this.getAdminStats();
+        } catch (error) {
+          console.error('⚠️ Auto cache warming error:', error);
+        }
+      }, 2000);
 
       this.triggerMapGeneration('clockin', {
         employee, lat, lon, line_name, userinfo, timestamp
@@ -687,12 +815,11 @@ class GoogleSheetsService {
       console.log(`📍 Location: ${lat}, ${lon}`);
       
       const employeeStatus = await this.getEmployeeStatus(employee);
-      
-      if (!employeeStatus.isOnWork) {
+        if (!employeeStatus.isOnWork) {
         console.log(`❌ Employee "${employee}" is not clocked in`);
         
-        const onWorkSheet = await this.getSheet(CONFIG.SHEETS.ON_WORK);
-        const rows = await onWorkSheet.getRows({ offset: 1 }); // เริ่มจากแถว 3
+        // ใช้ cached data แทนการเรียก API ใหม่
+        const rows = await this.getCachedSheetData(CONFIG.SHEETS.ON_WORK);
         
         const suggestions = rows
           .map(row => ({
@@ -717,45 +844,31 @@ class GoogleSheetsService {
           message: message,
           employee,
           currentStatus: 'not_clocked_in',
-          suggestions: suggestions.length > 0 ? suggestions : undefined        };      }
+          suggestions: suggestions.length > 0 ? suggestions : undefined
+        };
+      }
 
       const timestamp = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss'); // ใช้เวลาไทยในรูปแบบ string
-      const workRecord = employeeStatus.workRecord;      const clockInTime = workRecord.clockIn;
+      const workRecord = employeeStatus.workRecord;
+        const clockInTime = workRecord.clockIn;
       console.log(`⏰ Clock in time: ${clockInTime}`);
       
       let hoursWorked = 0;
       if (clockInTime) {
         // ใช้ moment สำหรับการคำนวณเวลาที่แม่นยำ
         const clockInMoment = moment(clockInTime).tz(CONFIG.TIMEZONE);
-        const timestampMoment = moment(timestamp).tz(CONFIG.TIMEZONE);
-        
-        if (clockInMoment.isValid() && timestampMoment.isValid()) {
-          // คำนวณเป็นนาทีก่อนแล้วแปลงเป็นชั่วโมง เพื่อความแม่นยำ
-          const minutesWorked = timestampMoment.diff(clockInMoment, 'minutes');
-          hoursWorked = minutesWorked / 60;
-          
-          console.log(`⏱️ Time calculation:`, {
-            clockIn: clockInMoment.format('YYYY-MM-DD HH:mm:ss'),
-            clockOut: timestampMoment.format('YYYY-MM-DD HH:mm:ss'),
-            minutesWorked,
-            hoursWorked: hoursWorked.toFixed(2)
-          });
-        } else {
-          console.error('Invalid moment objects:', {
-            clockInValid: clockInMoment.isValid(),
-            timestampValid: timestampMoment.isValid()
-          });
-        }
+        const timestampMoment = moment().tz(CONFIG.TIMEZONE);
+        hoursWorked = timestampMoment.diff(clockInMoment, 'hours', true); // true = ให้ทศนิยม
+        console.log(`⏱️ Hours worked: ${hoursWorked.toFixed(2)}`);
       }
       
       // แปลงพิกัดเป็นชื่อสถานที่
       const locationName = await this.getLocationName(lat, lon);
-      console.log(`📍 Clock out location: ${locationName}`);
-
-      console.log(`✅ Proceeding with clock out for "${employee}"`);
+      console.log(`📍 Clock out location: ${locationName}`);      console.log(`✅ Proceeding with clock out for "${employee}"`);
       
+      // ใช้ cached data แทนการเรียก API ใหม่
       const mainSheet = await this.getSheet(CONFIG.SHEETS.MAIN);
-      const rows = await mainSheet.getRows();
+      const rows = await this.getCachedSheetData(CONFIG.SHEETS.MAIN);
       
       console.log(`📊 Total rows in MAIN: ${rows.length}`);
       console.log(`🎯 Target row index: ${workRecord.mainRowIndex}`);
@@ -857,11 +970,24 @@ class GoogleSheetsService {
       } catch (updateError) {
         console.error('❌ Error updating main row:', updateError);
         throw new Error('ไม่สามารถอัปเดตข้อมูลได้: ' + updateError.message);
-      }
-
-      try {
+      }      try {
         await workRecord.row.delete();
         console.log('✅ Removed from ON_WORK sheet');
+          // Clear cache เนื่องจากมีการเปลี่ยนแปลงข้อมูล
+        this.clearCache('onwork');
+        this.clearCache('main');
+        this.clearCache('stats');
+        
+        // ทำการ warm cache อัตโนมัติ
+        setTimeout(async () => {
+          try {
+            await this.getCachedSheetData(CONFIG.SHEETS.ON_WORK);
+            await this.getAdminStats();
+          } catch (error) {
+            console.error('⚠️ Auto cache warming error:', error);
+          }
+        }, 2000);
+        
       } catch (deleteError) {
         console.error('❌ Error deleting from ON_WORK:', deleteError);
       }
@@ -970,11 +1096,53 @@ class GoogleSheetsService {
       } else {
         // ถ้าไม่ได้ข้อมูล ใช้พิกัดแทน
         return `${lat}, ${lon}`;
-      }
-    } catch (error) {
+      }    } catch (error) {
       console.warn(`⚠️ Location lookup failed for ${lat}, ${lon}:`, error.message);
       // ถ้าเกิดข้อผิดพลาด ใช้พิกัดแทน
       return `${lat}, ${lon}`;
+    }
+  }
+
+  // เพิ่มระบบ Emergency Mode เมื่อ API quota หมด
+  setEmergencyMode(enabled) {
+    this.emergencyMode = enabled;
+    if (enabled) {
+      console.log('🚨 Emergency mode ENABLED - Using cached data only');
+      // ขยาย TTL ของ cache เป็น 1 ชั่วโมง
+      Object.keys(this.cache).forEach(key => {
+        this.cache[key].ttl = 3600000; // 1 hour
+      });
+    } else {
+      console.log('✅ Emergency mode DISABLED - Normal operation resumed');
+      // คืนค่า TTL เดิม
+      this.cache.employees.ttl = 300000; // 5 minutes
+      this.cache.onwork.ttl = 60000;     // 1 minute
+      this.cache.main.ttl = 30000;       // 30 seconds
+      this.cache.stats.ttl = 120000;     // 2 minutes
+    }
+  }
+
+  async safeGetCachedSheetData(sheetName) {
+    try {
+      return await this.getCachedSheetData(sheetName);
+    } catch (error) {
+      console.error(`❌ Failed to get data for ${sheetName}:`, error.message);
+      
+      // เข้าสู่ emergency mode
+      if (!this.emergencyMode) {
+        this.setEmergencyMode(true);
+      }
+      
+      // คืนค่า cache เก่า (ถ้ามี)
+      const staleData = this.getCache(sheetName.toLowerCase().replace(/\s+/g, ''));
+      if (staleData) {
+        console.log(`📋 Using emergency cache for ${sheetName}`);
+        return staleData;
+      }
+      
+      // ถ้าไม่มี cache เลย คืนค่า array ว่าง
+      console.warn(`⚠️ No cache available for ${sheetName}, returning empty data`);
+      return [];
     }
   }
 }
@@ -1249,85 +1417,72 @@ app.get('/api/admin/export/:type', authenticateAdmin, async (req, res) => {
   }
 });
 
-// API สำหรับส่งออกรายงานรายเดือนแบบละเอียด
-app.post('/api/reports/export-monthly-detailed', authenticateAdmin, async (req, res) => {
-  console.log('📊 Received monthly detailed report request');
-  console.log('Request body:', req.body);
-  
-  try {
-    const { month, year, options } = req.body;
-    
-    if (!month || !year) {
-      console.error('Missing parameters:', { month, year });
-      return res.status(400).json({
-        success: false,
-        error: 'Missing month or year parameter'
-      });
-    }
-
-    // Parse options
-    const reportOptions = options || {
-      showDailyBreakdown: true,
-      showWeekends: true,
-      showSummary: true,
-      showLateComers: false,
-      showOvertime: false,
-      colorCoding: true
-    };
-
-    console.log(`📊 Generating detailed monthly report for ${month}/${year}`);
-
-    // สร้าง workbook ใหม่
-    const workbook = new ExcelJS.Workbook();
-    
-    // ตั้งค่าข้อมูลเอกสาร
-    workbook.creator = 'ระบบจัดการลงเวลา อบต.ข่าใหญ่';
-    workbook.lastModifiedBy = 'ระบบ';
-    workbook.created = new Date();
-    workbook.modified = new Date();
-
-    // สร้าง worksheet หลัก
-    const worksheet = workbook.addWorksheet(`รายงานเดือน ${getThaiMonth(month)} ${parseInt(year) + 543}`);
-
-    // ดึงข้อมูลจาก Google Sheets
-    const attendanceData = await getMonthlyAttendanceDataFromSheets(month, year);
-    const employees = await getEmployeesListFromSheets();
-    
-    console.log(`📊 Found ${attendanceData.length} attendance records for ${employees.length} employees`);
-
-    // สร้างรายงานตามตัวเลือก
-    if (reportOptions.showDailyBreakdown) {
-      await createDailyBreakdownReport(worksheet, attendanceData, employees, month, year, reportOptions);
-    }
-
-    // เพิ่ม worksheet สรุป
-    if (reportOptions.showSummary) {
-      const summarySheet = workbook.addWorksheet('สรุปรายเดือน');
-      await createMonthlySummary(summarySheet, attendanceData, employees, month, year);
-    }
-
-    // ตั้งค่าการตอบกลับ
-    const monthName = getThaiMonth(month);
-    const filename = `รายงานรายเดือน_${monthName}_${parseInt(year) + 543}_แบ่งวันชัดเจน.xlsx`;
-    
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-
-    // ส่งไฟล์
-    await workbook.xlsx.write(res);
-    res.end();
-
-    console.log(`✅ Monthly detailed report sent: ${filename}`);
-
-  } catch (error) {
-    console.error('Export error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'เกิดข้อผิดพลาดในการส่งออกรายงาน',
-      error: error.message 
-    });
+// ========== API Rate Limiting และ Monitoring ==========
+class APIMonitor {
+  constructor() {
+    this.apiCalls = [];
+    this.maxCallsPerMinute = 30; // จำกัด API calls ไม่เกิน 30 ครั้งต่อนาที
+    this.maxCallsPerHour = 300; // จำกัด API calls ไม่เกิน 300 ครั้งต่อชั่วโมง
   }
-});
+
+  logAPICall(operation) {
+    const now = new Date();
+    this.apiCalls.push({
+      timestamp: now,
+      operation: operation
+    });
+
+    // ลบ logs ที่เก่าเกิน 1 ชั่วโมง
+    this.apiCalls = this.apiCalls.filter(call => 
+      (now - call.timestamp) < 3600000 // 1 hour
+    );
+
+    console.log(`📊 API Call: ${operation} (Total in last hour: ${this.apiCalls.length})`);
+  }
+
+  canMakeAPICall() {
+    const now = new Date();
+    
+    // นับจำนวน API calls ในนาทีที่แล้ว
+    const callsInLastMinute = this.apiCalls.filter(call => 
+      (now - call.timestamp) < 60000 // 1 minute
+    ).length;
+
+    // นับจำนวน API calls ในชั่วโมงที่แล้ว
+    const callsInLastHour = this.apiCalls.length;
+
+    if (callsInLastMinute >= this.maxCallsPerMinute) {
+      console.warn(`⚠️ Rate limit exceeded: ${callsInLastMinute} calls in last minute`);
+      return false;
+    }
+
+    if (callsInLastHour >= this.maxCallsPerHour) {
+      console.warn(`⚠️ Rate limit exceeded: ${callsInLastHour} calls in last hour`);
+      return false;
+    }
+
+    return true;
+  }
+
+  getStats() {
+    const now = new Date();
+    const callsInLastMinute = this.apiCalls.filter(call => 
+      (now - call.timestamp) < 60000
+    ).length;
+    const callsInLastHour = this.apiCalls.length;
+
+    return {
+      callsInLastMinute,
+      callsInLastHour,
+      maxCallsPerMinute: this.maxCallsPerMinute,
+      maxCallsPerHour: this.maxCallsPerHour,
+      percentageUsedPerMinute: (callsInLastMinute / this.maxCallsPerMinute) * 100,
+      percentageUsedPerHour: (callsInLastHour / this.maxCallsPerHour) * 100
+    };
+  }
+}
+
+const apiMonitor = new APIMonitor();
 
 // ========== Original Routes (unchanged) ==========
 
@@ -1420,6 +1575,15 @@ app.post('/api/clockin', async (req, res) => {
       });
     }
 
+    // ตรวจสอบ rate limit
+    if (!apiMonitor.canMakeAPICall()) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many requests, please try again later'
+      });
+    }
+
+    apiMonitor.logAPICall('clockIn');
     const result = await sheetsService.clockIn({
       employee, userinfo, lat, lon, line_name, line_picture
     });
@@ -1447,6 +1611,15 @@ app.post('/api/clockout', async (req, res) => {
       });
     }
 
+    // ตรวจสอบ rate limit
+    if (!apiMonitor.canMakeAPICall()) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many requests, please try again later'
+      });
+    }
+
+    apiMonitor.logAPICall('clockOut');
     const result = await sheetsService.clockOut({
       employee, lat, lon, line_name
     });
@@ -1472,12 +1645,10 @@ app.post('/api/check-status', async (req, res) => {
         success: false,
         error: 'Missing employee name'
       });
-    }
+    }    const employeeStatus = await sheetsService.getEmployeeStatus(employee);
 
-    const employeeStatus = await sheetsService.getEmployeeStatus(employee);
-
-    const onWorkSheet = await sheetsService.getSheet(CONFIG.SHEETS.ON_WORK);
-    const rows = await onWorkSheet.getRows({ offset: 1 }); // เริ่มจากแถว 3
+    // ใช้ cached data แทนการเรียก API ใหม่
+    const rows = await sheetsService.getCachedSheetData(CONFIG.SHEETS.ON_WORK);
     
     const currentEmployees = rows.map(row => ({
       systemName: row.get('ชื่อในระบบ'),
@@ -1515,6 +1686,100 @@ app.post('/api/check-status', async (req, res) => {
   }
 });
 
+// API Monitoring endpoint
+app.get('/api/admin/api-stats', authenticateAdmin, (req, res) => {
+  const stats = apiMonitor.getStats();
+  res.json({
+    success: true,
+    data: stats
+  });
+});
+
+// API สำหรับ manual cache refresh (สำหรับ admin เท่านั้น)
+app.post('/api/admin/refresh-cache', authenticateAdmin, async (req, res) => {
+  try {
+    console.log('🔄 Manual cache refresh initiated by admin');
+    
+    // Clear all cache
+    sheetsService.clearCache();
+    
+    // Warm critical caches
+    await sheetsService.getCachedSheetData(CONFIG.SHEETS.ON_WORK);
+    await sheetsService.getCachedSheetData(CONFIG.SHEETS.EMPLOYEES);
+    
+    res.json({
+      success: true,
+      message: 'Cache refreshed successfully'
+    });
+  } catch (error) {
+    console.error('Cache refresh error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to refresh cache'
+    });
+  }
+});
+
+// API สำหรับตรวจสอบสถานะ API quota
+app.get('/api/admin/quota-status', authenticateAdmin, async (req, res) => {
+  try {
+    const apiStats = apiMonitor.getStats();
+    const isEmergencyMode = sheetsService.emergencyMode || false;
+    
+    // ทดสอบการเชื่อมต่อ API
+    let apiHealthy = true;
+    let lastError = null;
+    
+    try {
+      await sheetsService.getCachedSheetData(CONFIG.SHEETS.EMPLOYEES);
+    } catch (error) {
+      apiHealthy = false;
+      lastError = error.message;
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        apiHealthy,
+        emergencyMode: isEmergencyMode,
+        lastError,
+        apiStats,
+        recommendations: apiHealthy ? 
+          ['ระบบทำงานปกติ'] : 
+          [
+            'รอให้ quota reset (ภายใน 24 ชั่วโมง)',
+            'ใช้ cached data ในระยะนี้',
+            'ลดการใช้งานฟีเจอร์ที่ต้องใช้ API'
+          ]
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// API สำหรับเปิด/ปิด emergency mode
+app.post('/api/admin/emergency-mode', authenticateAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    sheetsService.setEmergencyMode(enabled);
+    
+    res.json({
+      success: true,
+      message: `Emergency mode ${enabled ? 'enabled' : 'disabled'}`,
+      emergencyMode: enabled
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // ========== Error Handling ==========
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
@@ -1546,8 +1811,7 @@ async function startServer() {
     console.log('📊 Initializing Google Sheets service...');
     
     await sheetsService.initialize();
-    
-    app.listen(PORT, () => {
+      app.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`📊 Google Sheets connected: ${CONFIG.GOOGLE_SHEETS.SPREADSHEET_ID}`);
       console.log(`🌐 Service URL: ${CONFIG.RENDER.SERVICE_URL}`);
@@ -1556,6 +1820,30 @@ async function startServer() {
       
       // เริ่ม Keep-Alive service
       keepAliveService.init();
+      
+      // เริ่ม Cache Warming แบบ Background
+      console.log('🔥 Starting initial cache warming...');
+      setTimeout(async () => {
+        try {
+          await sheetsService.getCachedSheetData(CONFIG.SHEETS.EMPLOYEES);
+          await sheetsService.getCachedSheetData(CONFIG.SHEETS.ON_WORK);
+          console.log('✅ Initial cache warming completed');
+          
+          // เริ่ม periodic cache warming
+          setInterval(async () => {
+            try {
+              console.log('🔄 Background cache refresh...');
+              await sheetsService.getCachedSheetData(CONFIG.SHEETS.ON_WORK);
+              await sheetsService.getAdminStats();
+            } catch (error) {
+              console.error('⚠️ Background cache refresh error:', error);
+            }
+          }, 60000); // ทุก 1 นาที
+          
+        } catch (error) {
+          console.error('⚠️ Initial cache warming error:', error);
+        }
+      }, 3000); // รอ 3 วินาทีก่อนเริ่ม
     });
     
   } catch (error) {
@@ -1576,539 +1864,6 @@ process.on('SIGINT', () => {
 });
 
 startServer();
-
-// ========== Excel Export Functions ==========
-
-// ฟังก์ชันช่วยสำหรับ Excel export
-function getThaiMonth(month) {
-  const months = [
-    '', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-  ];
-  return months[parseInt(month)];
-}
-
-function getThaiDayName(dayIndex) {
-  const days = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
-  return days[dayIndex];
-}
-
-function getWorkingDaysInMonth(month, year) {
-  const daysInMonth = moment(`${year}-${month}`, 'YYYY-MM').daysInMonth();
-  let workingDays = 0;
-  
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = moment(`${year}-${month}-${day.toString().padStart(2, '0')}`);
-    const dayOfWeek = date.day();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) { // ไม่ใช่วันเสาร์อาทิตย์
-      workingDays++;
-    }
-  }
-  
-  return workingDays;
-}
-
-// ดึงข้อมูลการทำงานจาก Google Sheets
-async function getMonthlyAttendanceDataFromSheets(month, year) {
-  try {
-    // ลองดึงข้อมูลจาก Google Sheets ก่อน
-    try {
-      const mainSheet = await sheetsService.getSheet(CONFIG.SHEETS.MAIN);
-      const rows = await mainSheet.getRows();
-      
-      const attendanceData = [];
-      
-      for (const row of rows) {
-        const dateStr = row.get('วันที่');
-        if (!dateStr) continue;
-        
-        const recordDate = new Date(dateStr);
-        if (recordDate.getMonth() + 1 === parseInt(month) && recordDate.getFullYear() === parseInt(year)) {
-          const clockIn = row.get('เวลาเข้า') || '';
-          const clockOut = row.get('เวลาออก') || '';
-          const employeeName = row.get('ชื่อพนักงาน') || '';
-          
-          // กำหนดสถานะ
-          let status = 'present';
-          let isLate = false;
-            if (clockIn) {
-            // ตรวจสอบมาสาย (หลัง 08:30)
-            if (clockIn > '08:30') {
-              isLate = true;
-            }
-          } else {
-            status = 'absent';
-          }
-          
-          // ตรวจสอบจากหมายเหตุ
-          const remarks = row.get('หมายเหตุ') || '';
-          if (remarks.includes('ลาป่วย') || remarks.includes('ลป')) {
-            status = 'sick_leave';
-          } else if (remarks.includes('ลากิจ') || remarks.includes('ลก')) {
-            status = 'personal_leave';
-          }
-          
-          attendanceData.push({
-            employeeId: employeeName, // ใช้ชื่อเป็น ID ชั่วคราว
-            employeeName: employeeName,
-            date: moment(recordDate).format('YYYY-MM-DD'),
-            status: status,
-            clockIn: clockIn,
-            clockOut: clockOut,
-            isLate: isLate,
-            remarks: remarks
-          });
-        }
-      }
-      
-      if (attendanceData.length > 0) {
-        return attendanceData;
-      }
-    } catch (sheetsError) {
-      console.log('Google Sheets not available, using sample data');
-    }
-      // ถ้าไม่มีข้อมูลจาก Google Sheets ให้ใช้ข้อมูลตัวอย่าง
-    // ดึงรายชื่อพนักงานจริงมาใช้
-    const employeesList = await getEmployeesListFromSheets();
-    return generateSampleAttendanceData(month, year, employeesList);
-    
-  } catch (error) {
-    console.error('Error getting attendance data:', error);
-    return generateSampleAttendanceData(month, year, employeesList);
-  }
-}
-
-// ดึงรายชื่อพนักงานจาก Google Sheets
-async function getEmployeesListFromSheets() {
-  try {
-    // ลองดึงข้อมูลจาก Google Sheets ก่อน
-    try {
-      const employees = await sheetsService.getEmployees();
-      if (employees && employees.length > 0) {
-        return employees.map((name, index) => ({
-          employeeId: name,
-          name: name
-        }));
-      }
-    } catch (sheetsError) {
-      console.log('Google Sheets not available, using sample employees');
-    }
-    
-    // ใช้ข้อมูลตัวอย่างถ้าไม่มีข้อมูลจาก Google Sheets
-    return [
-      { employeeId: 'นายสมชาย ใจดี', name: 'นายสมชาย ใจดี' },
-      { employeeId: 'นางสาวสมหญิง รักงาน', name: 'นางสาวสมหญิง รักงาน' },
-      { employeeId: 'นายสมศักดิ์ ทำงานดี', name: 'นายสมศักดิ์ ทำงานดี' },
-      { employeeId: 'นางสมใจ บริการดี', name: 'นางสมใจ บริการดี' },
-      { employeeId: 'นายสมปอง มีความสุข', name: 'นายสมปอง มีความสุข' }
-    ];
-    
-  } catch (error) {
-    console.error('Error getting employees list:', error);
-    return [
-      { employeeId: 'นายสมชาย ใจดี', name: 'นายสมชาย ใจดี' },
-      { employeeId: 'นางสาวสมหญิง รักงาน', name: 'นางสาวสมหญิง รักงาน' }
-    ];
-  }
-}
-
-// สร้างรายงานแบ่งตามวัน
-async function createDailyBreakdownReport(worksheet, attendanceData, employees, month, year, options = {}) {
-    try {
-        console.log(`Generating detailed report for ${month}/${year}`);
-        
-        // หาจำนวนวันในเดือน
-        const daysInMonth = new Date(year, month, 0).getDate();
-        
-        // ตั้งค่าความกว้างของคอลัมน์
-        worksheet.getColumn(1).width = 8;  // ลำดับ
-        worksheet.getColumn(2).width = 15; // รหัสพนักงาน
-        worksheet.getColumn(3).width = 25; // ชื่อ-นามสกุล
-        
-        // วันที่
-        for (let day = 1; day <= daysInMonth; day++) {
-            worksheet.getColumn(3 + day).width = 12;
-        }
-        
-        // คอลัมน์สรุป
-        worksheet.getColumn(4 + daysInMonth).width = 12;     // วันทำงาน
-        worksheet.getColumn(5 + daysInMonth).width = 12;     // วันมาสาย
-        worksheet.getColumn(6 + daysInMonth).width = 12;     // วันขาดงาน
-        worksheet.getColumn(7 + daysInMonth).width = 12;     // วันลา
-        worksheet.getColumn(8 + daysInMonth).width = 20;     // หมายเหตุ
-        
-        // สร้าง header
-        const headerRow = ['ลำดับ', 'รหัสพนักงาน', 'ชื่อ-นามสกุล'];
-        
-        // เพิ่มวันที่ในเดือน
-        for (let day = 1; day <= daysInMonth; day++) {
-            const currentDate = new Date(year, month - 1, day);
-            const dayName = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'][currentDate.getDay()];
-            headerRow.push(`${day}\n(${dayName})`);
-        }
-        
-        headerRow.push('วันทำงาน', 'วันมาสาย', 'วันขาดงาน', 'วันลา', 'หมายเหตุ');
-        
-        // เพิ่ม header row
-        worksheet.addRow(headerRow);
-        
-        // ตั้งค่าสไตล์ header
-        const headerRowObj = worksheet.getRow(1);
-        headerRowObj.font = { name: 'TH SarabunPSK', size: 16, bold: true };
-        headerRowObj.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        headerRowObj.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFE6E6FA' }
-        };
-          console.log(`Found ${employees.length} employees`);
-        console.log(`Found ${attendanceData.length} attendance records`);
-        
-        // Debug: แสดงข้อมูลตัวอย่าง
-        if (employees.length > 0) {
-            console.log('Sample employee:', employees[0]);
-        }
-        if (attendanceData.length > 0) {
-            console.log('Sample attendance:', attendanceData[0]);
-        }
-        
-        // เพิ่มข้อมูลพนักงานแต่ละคน
-        employees.forEach((employee, index) => {
-            const row = [
-                index + 1,
-                employee.employeeId || (index + 1),
-                employee.name || `${employee.firstName || ''} ${employee.lastName || ''}`.trim()
-            ];
-            
-            let workDays = 0;
-            let lateDays = 0;
-            let absentDays = 0;
-            let leaveDays = 0;
-            
-            console.log(`Processing employee: ${employee.employeeId || index + 1} - ${employee.name}`);
-            
-            // Debug: แสดงข้อมูล attendance ที่เกี่ยวข้องกับพนักงานคนนี้
-            const employeeAttendances = attendanceData.filter(att => 
-                att.employeeName === employee.name || 
-                att.employeeId === employee.name ||
-                att.employeeName === employee.employeeId ||
-                att.employeeId === employee.employeeId
-            );
-            console.log(`Found ${employeeAttendances.length} attendance records for ${employee.name}:`, employeeAttendances.slice(0, 3));
-            
-            // ตรวจสอบแต่ละวันในเดือน
-            for (let day = 1; day <= daysInMonth; day++) {
-                const currentDate = new Date(year, month - 1, day);
-                const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                
-                // ตรวจสอบวันหยุด (เสาร์-อาทิตย์)
-                const dayOfWeek = currentDate.getDay();
-                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;                  // หาข้อมูลการลงเวลาในวันนี้จาก attendanceData
-                const dayAttendance = attendanceData.find(att => {
-                    // ง่ายๆ ใช้ชื่อพนักงานจับคู่
-                    const nameMatch = att.employeeName === employee.name || 
-                                     att.employeeId === employee.name ||
-                                     att.employeeName === employee.employeeId ||
-                                     att.employeeId === employee.employeeId;
-                    
-                    const dateMatch = att.date === dateKey;
-                    
-                    return nameMatch && dateMatch;
-                });
-                
-                let cellValue = '';
-                
-                if (dayAttendance) {
-                    console.log(`📋 Found attendance: ${employee.name} on ${dateKey} - Status: ${dayAttendance.status}, ClockIn: ${dayAttendance.clockIn}`);
-                    
-                    // มีข้อมูลการลงเวลา
-                    if (dayAttendance.status === 'present') {
-                        if (dayAttendance.isLate) {
-                            cellValue = `มาสาย\n${dayAttendance.clockIn}`;
-                            lateDays++;
-                        } else {
-                            cellValue = dayAttendance.clockIn;
-                        }
-                        workDays++;
-                    } else if (dayAttendance.status === 'sick_leave') {
-                        cellValue = 'ลาป่วย';
-                        leaveDays++;
-                    } else if (dayAttendance.status === 'personal_leave') {
-                        cellValue = 'ลากิจ';
-                        leaveDays++;
-                    } else if (dayAttendance.status === 'absent') {
-                        cellValue = 'ขาด';
-                        absentDays++;
-                    } else {
-                        // กรณีมีข้อมูลแต่ไม่ระบุสถานะชัด ให้ถือว่าเข้างาน
-                        cellValue = dayAttendance.clockIn || '✓';
-                        workDays++;
-                    }
-                } else if (isWeekend && !options.showWeekends) {
-                    // วันหยุด
-                    cellValue = 'หยุด';
-                } else if (!isWeekend) {
-                    // ไม่มีข้อมูลการลงเวลาในวันทำงาน
-                    cellValue = 'ขาด';
-                    absentDays++;
-                } else {
-                    // วันหยุดแต่ showWeekends = true
-                    cellValue = 'หยุด';
-                }
-                
-                row.push(cellValue);
-            }
-            
-            // เพิ่มสรุปข้อมูล
-            row.push(workDays, lateDays, absentDays, leaveDays, '');
-            
-            console.log(`Employee ${employee.employeeId || index + 1} summary: Work=${workDays}, Late=${lateDays}, Absent=${absentDays}, Leave=${leaveDays}`);
-            
-            const addedRow = worksheet.addRow(row);
-            
-            // ตั้งค่าสไตล์แถว
-            addedRow.font = { name: 'TH SarabunPSK', size: 14 };
-            addedRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-            
-            // เพิ่มสีให้เซลล์ตามสถานะ
-            for (let day = 1; day <= daysInMonth; day++) {
-                const cellIndex = 3 + day; // เริ่มจากคอลัมน์ที่ 4 (D)
-                const cell = addedRow.getCell(cellIndex);
-                const cellValue = row[cellIndex - 1];
-                
-                if (cellValue && cellValue !== 'หยุด' && cellValue !== '') {
-                    if (cellValue.includes('มาสาย')) {
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFA500' } };
-                    } else if (cellValue.includes('ลา')) {
-                        if (cellValue.includes('ป่วย')) {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF87CEEB' } };
-                        } else {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
-                        }
-                    } else if (cellValue === 'ขาด') {
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
-                    } else if (cellValue.match(/^\d{2}:\d{2}$/)) {
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF90EE90' } };
-                    } else if (cellValue === '✓' || cellValue.includes(':')) {
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF90EE90' } };
-                    }
-                } else if (cellValue === 'หยุด') {
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
-                }
-            }
-        });
-        
-        // เพิ่มข้อมูลสรุปท้ายรายงาน
-        const summaryStartRow = employees.length + 3;
-        
-        worksheet.getCell(`A${summaryStartRow}`).value = 'สรุปข้อมูลรายงาน';
-        worksheet.getCell(`A${summaryStartRow}`).font = { name: 'TH SarabunPSK', size: 16, bold: true };
-        
-        worksheet.getCell(`A${summaryStartRow + 1}`).value = `จำนวนพนักงานทั้งหมด: ${employees.length} คน`;
-        worksheet.getCell(`A${summaryStartRow + 2}`).value = `จำนวนวันในเดือน: ${daysInMonth} วัน`;
-        worksheet.getCell(`A${summaryStartRow + 3}`).value = `สร้างรายงานเมื่อ: ${new Date().toLocaleString('th-TH')}`;
-        
-        // ตั้งค่าฟอนต์สำหรับข้อมูลสรุป
-        for (let i = 1; i <= 3; i++) {
-            worksheet.getCell(`A${summaryStartRow + i}`).font = { name: 'TH SarabunPSK', size: 16 };
-        }
-        
-        // เพิ่มคำอธิบายสัญลักษณ์
-        const legendStartRow = summaryStartRow + 5;
-        worksheet.getCell(`A${legendStartRow}`).value = 'คำอธิบายสัญลักษณ์:';
-        worksheet.getCell(`A${legendStartRow}`).font = { name: 'TH SarabunPSK', size: 16, bold: true };
-        
-        const legends = [
-            '🟢 เขียว = เข้างานปกติ',
-            '🟠 ส้ม = มาสาย', 
-            '🔴 แดง = ขาดงาน',
-            '🔵 ฟ้า = ลาป่วย',
-            '🟡 เหลือง = ลากิจ',
-            '⚫ เทา = วันหยุด'
-        ];
-        
-        legends.forEach((legend, index) => {
-            const cell = worksheet.getCell(`A${legendStartRow + 1 + index}`);
-            cell.value = legend;
-            cell.font = { name: 'TH SarabunPSK', size: 14 };
-        });
-        
-        console.log('Daily breakdown report generated successfully');
-        
-    } catch (error) {
-        console.error('Error in createDailyBreakdownReport:', error);
-        throw error;
-    }
-}
-
-// สร้างสรุปรายเดือน
-async function createMonthlySummary(worksheet, attendanceData, employees, month, year) {
-  // ตั้งค่าคอลัมน์
-  worksheet.getColumn(1).width = 25;
-  worksheet.getColumn(2).width = 15;
-  worksheet.getColumn(3).width = 12;
-  worksheet.getColumn(4).width = 12;
-  worksheet.getColumn(5).width = 12;
-  worksheet.getColumn(6).width = 12;
-  worksheet.getColumn(7).width = 12;
-  worksheet.getColumn(8).width = 15;
-
-  // หัวข้อ
-  const titleRow = worksheet.addRow([
-    `สรุปการเข้างานประจำเดือน ${getThaiMonth(month)} พ.ศ. ${parseInt(year) + 543}`
-  ]);
-  worksheet.mergeCells(1, 1, 1, 8);
-  titleRow.getCell(1).font = { name: 'TH SarabunPSK', size: 18, bold: true };
-  titleRow.getCell(1).alignment = { horizontal: 'center' };
-  titleRow.height = 30;
-
-  worksheet.addRow([]);
-
-  // หัวตาราง
-  const headerRow = worksheet.addRow([
-    'ชื่อ-นามสกุล', 'รหัสพนักงาน', 'มาทำงาน', 'ขาดงาน', 
-    'มาสาย', 'ลาป่วย', 'ลากิจ', 'เปอร์เซ็นต์การมา'
-  ]);
-
-  headerRow.eachCell((cell) => {
-    cell.font = { name: 'TH SarabunPSK', size: 14, bold: true };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6E6FA' } };
-    cell.border = {
-      top: { style: 'thin' }, left: { style: 'thin' },
-      bottom: { style: 'thin' }, right: { style: 'thin' }
-    };
-  });
-
-  // คำนวณข้อมูลสรุป
-  const workingDaysInMonth = getWorkingDaysInMonth(month, year);
-  
-  employees.forEach(employee => {
-    const employeeData = attendanceData.filter(d => d.employeeId === employee.employeeId);
-    
-    const presentDays = employeeData.filter(d => d.status === 'present').length;
-    const absentDays = employeeData.filter(d => d.status === 'absent').length;
-    const lateDays = employeeData.filter(d => d.status === 'present' && d.isLate).length;
-    const sickLeaveDays = employeeData.filter(d => d.status === 'sick_leave').length;
-    const personalLeaveDays = employeeData.filter(d => d.status === 'personal_leave').length;
-    
-    const attendanceRate = workingDaysInMonth > 0 ? ((presentDays / workingDaysInMonth) * 100).toFixed(1) : '0.0';
-
-    const dataRow = worksheet.addRow([
-      employee.name,
-      employee.employeeId,
-      presentDays,
-      absentDays,
-      lateDays,
-      sickLeaveDays,
-      personalLeaveDays,
-      `${attendanceRate}%`
-    ]);
-
-    dataRow.eachCell((cell, colNumber) => {
-      cell.font = { name: 'TH SarabunPSK', size: 12 };
-      cell.alignment = { 
-        horizontal: colNumber === 1 ? 'left' : 'center', 
-        vertical: 'middle' 
-      };
-      cell.border = {
-        top: { style: 'thin' }, left: { style: 'thin' },
-        bottom: { style: 'thin' }, right: { style: 'thin' }
-      };
-
-      // ใส่สีตามเปอร์เซ็นต์
-      if (colNumber === 8) {
-        const rate = parseFloat(attendanceRate);
-        if (rate >= 95) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF90EE90' } };
-        } else if (rate >= 85) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD700' } };
-        } else {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF6B6B' } };
-        }
-      }
-    });
-  });
-}
-
-// API สำหรับส่งออกรายงานรายเดือนแบบละเอียด
-app.post('/api/reports/export-monthly-detailed', authenticateAdmin, async (req, res) => {
-  console.log('📊 Received monthly detailed report request');
-  console.log('Request body:', req.body);
-  
-  try {
-    const { month, year, options } = req.body;
-    
-    if (!month || !year) {
-      console.error('Missing parameters:', { month, year });
-      return res.status(400).json({
-        success: false,
-        error: 'Missing month or year parameter'
-      });
-    }
-
-    // Parse options
-    const reportOptions = options || {
-      showDailyBreakdown: true,
-      showWeekends: true,
-      showSummary: true,
-      showLateComers: false,
-      showOvertime: false,
-      colorCoding: true
-    };
-
-    console.log(`📊 Generating detailed monthly report for ${month}/${year}`);
-
-    // สร้าง workbook ใหม่
-    const workbook = new ExcelJS.Workbook();
-    
-    // ตั้งค่าข้อมูลเอกสาร
-    workbook.creator = 'ระบบจัดการลงเวลา อบต.ข่าใหญ่';
-    workbook.lastModifiedBy = 'ระบบ';
-    workbook.created = new Date();
-    workbook.modified = new Date();
-
-    // สร้าง worksheet หลัก
-    const worksheet = workbook.addWorksheet(`รายงานเดือน ${getThaiMonth(month)} ${parseInt(year) + 543}`);
-
-    // ดึงข้อมูลจาก Google Sheets
-    const attendanceData = await getMonthlyAttendanceDataFromSheets(month, year);
-    const employees = await getEmployeesListFromSheets();
-    
-    console.log(`📊 Found ${attendanceData.length} attendance records for ${employees.length} employees`);
-
-    // สร้างรายงานตามตัวเลือก
-    if (reportOptions.showDailyBreakdown) {
-      await createDailyBreakdownReport(worksheet, attendanceData, employees, month, year, reportOptions);
-    }
-
-    // เพิ่ม worksheet สรุป
-    if (reportOptions.showSummary) {
-      const summarySheet = workbook.addWorksheet('สรุปรายเดือน');
-      await createMonthlySummary(summarySheet, attendanceData, employees, month, year);
-    }
-
-    // ตั้งค่าการตอบกลับ
-    const monthName = getThaiMonth(month);
-    const filename = `รายงานรายเดือน_${monthName}_${parseInt(year) + 543}_แบ่งวันชัดเจน.xlsx`;
-    
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-
-    // ส่งไฟล์
-    await workbook.xlsx.write(res);
-    res.end();
-
-    console.log(`✅ Monthly detailed report sent: ${filename}`);
-
-  } catch (error) {
-    console.error('Export error:', error);    res.status(500).json({ 
-      success: false, 
-      message: 'เกิดข้อผิดพลาดในการส่งออกรายงาน',
-      error: error.message 
-    });
-  }
-});
 
 // สร้างข้อมูลตัวอย่างสำหรับการทดสอบ
 function generateSampleAttendanceData(month, year, employeesList = null) {
@@ -2157,7 +1912,8 @@ function generateSampleAttendanceData(month, year, employeesList = null) {
           const lateMinutes = Math.floor(Math.random() * 60) + 1; // สาย 1-60 นาที
           const lateHour = 8 + Math.floor((30 + lateMinutes) / 60);
           const lateMin = (30 + lateMinutes) % 60;
-          clockIn = `${lateHour.toString().padStart(2, '0')}:${lateMin.toString().padStart(2, '0')}`;        } else {
+          clockIn = `${lateHour.toString().padStart(2, '0')}:${lateMin.toString().padStart(2, '0')}`;
+        } else {
           // มาทำงานปกติ แต่อาจจะมาก่อนหรือหลัง 8:30 เล็กน้อย
           const variation = Math.floor(Math.random() * 30) - 15; // -15 ถึง +15 นาที
           const clockInMinutes = 30 + variation;
