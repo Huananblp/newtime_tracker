@@ -27,9 +27,11 @@
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>    <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-    <!-- Google AdSense -->
+    <!-- Google AdSense - DISABLED -->
+    <!-- 
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1797172064583364"
          crossorigin="anonymous"></script>
+    -->
 
     <title>ระบบลงเวลาออนไลน์ อบต.ข่าใหญ่</title>
 
@@ -238,7 +240,8 @@
             transition: transform 0.2s ease;
         }
 
-        /* Ad Modal Styles */
+        /* Ad Modal Styles - DISABLED */
+        /*
         .ad-modal {
             display: none;
             position: fixed;
@@ -311,6 +314,7 @@
             align-items: center;
             justify-content: center;
         }
+        */
 
         .version-info {
             position: fixed;
@@ -649,26 +653,28 @@
                style="color: #6c757d; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">
                 📋 ข้อกำหนดการใช้บริการ
             </a>
+            <!-- ข้อกำหนดโฆษณา - DISABLED
             <span style="color: #6c757d; margin: 0 8px;">|</span>
             <a href="javascript:void(0)" onclick="showAdsPolicy()" 
                style="color: #6c757d; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">
                 📺 ข้อกำหนดโฆษณา
             </a>
+            -->
         </div>
     </div>
 
-    <!-- Ad Modal -->
+    <!-- Ad Modal - DISABLED -->
+    <!-- 
     <div id="adModal" class="ad-modal">
         <div class="ad-modal-content">
             <div class="ad-timer" id="adTimer">10</div>
             <button class="ad-close-btn" id="adCloseBtn" onclick="closeAdModal()">×</button>
             
             <div class="success-message" id="successMessage">
-                <!-- ข้อความสำเร็จจะแสดงที่นี่ -->
+                ข้อความสำเร็จจะแสดงที่นี่
             </div>
             
             <div class="ad-container">
-                <!-- Google AdSense Display Ad -->
                 <ins class="adsbygoogle"
                      style="display:block; width:300px; height:250px;"
                      data-ad-client="ca-pub-1797172064583364"
@@ -681,6 +687,7 @@
             </div>
         </div>
     </div>
+    -->
 
     <!-- Privacy Policy Modal -->
     <div id="privacyModal" class="privacy-modal">
@@ -882,7 +889,8 @@
         </div>
     </div>
 
-    <!-- Google Ads Policy Modal -->
+    <!-- Google Ads Policy Modal - DISABLED -->
+    <!-- 
     <div id="adsModal" class="privacy-modal">
         <div class="privacy-modal-content">
             <div class="privacy-header">
@@ -991,6 +999,7 @@
             </div>
         </div>
     </div>
+    -->
 
     <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
     <script>
@@ -1324,58 +1333,29 @@
             }, 3000);
         }
 
-        // ======== Ad Modal Functions ========
+        // ======== Ad Modal Functions - DISABLED ========
         let adTimer = null;
-        let adTimeRemaining = 10;function showAdModal(successMessage) {
-            // แสดงข้อความสำเร็จ
-            document.getElementById('successMessage').innerHTML = successMessage;
+        let adTimeRemaining = 10;
+
+        function showAdModal(successMessage) {
+            // โฆษณาถูกปิดการใช้งาน - แสดงแค่ข้อความสำเร็จ
+            console.log('📺 Ads disabled - showing success message:', successMessage);
             
-            // แสดง modal
-            document.getElementById('adModal').style.display = 'block';
-            
-            // รีเซ็ตตัวจับเวลา
-            adTimeRemaining = 10;
-            document.getElementById('adTimer').textContent = adTimeRemaining;
-            document.getElementById('remainingTime').textContent = adTimeRemaining;
-            
-            // แสดง timer และซ่อนปุ่มปิด
-            document.getElementById('adTimer').style.display = 'block';
-            document.getElementById('adCloseBtn').style.display = 'none';
-              // เริ่มจับเวลา
-            adTimer = setInterval(() => {
-                adTimeRemaining--;
-                document.getElementById('adTimer').textContent = adTimeRemaining;
-                document.getElementById('remainingTime').textContent = adTimeRemaining;
-                
-                if (adTimeRemaining <= 0) {
-                    clearInterval(adTimer);
-                    // ซ่อน timer และแสดงปุ่มปิดแทน
-                    document.getElementById('adTimer').style.display = 'none';
-                    document.getElementById('adCloseBtn').style.display = 'block';
-                    document.getElementById('remainingTime').textContent = '0';
-                }
-            }, 1000);
-            
-            // โหลดโฆษณา
-            try {
-                (adsbygoogle = window.adsbygoogle || []).push({});
-                console.log('📺 AdSense ad loaded');
-            } catch (error) {
-                console.warn('⚠️ AdSense error:', error);
-            }
+            // แสดงข้อความสำเร็จผ่าน SweetAlert แทน
+            Swal.fire({
+                html: successMessage,
+                icon: 'success',
+                timer: 3000,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
         }
 
         function closeAdModal() {
-            // ล้างตัวจับเวลา
-            if (adTimer) {
-                clearInterval(adTimer);
-                adTimer = null;
-            }
-            
-            // ปิด modal
-            document.getElementById('adModal').style.display = 'none';
-            
-            console.log('📺 Ad modal closed');
+            // โฆษณาถูกปิดการใช้งาน - ไม่ต้องทำอะไร
+            console.log('📺 Ad modal close called (ads disabled)');
+            return false;
         }        // ======== Enhanced Clock In/Out Functions ========
         async function ClockIn() {
             event.preventDefault();
@@ -2003,25 +1983,32 @@
             console.log('📋 Terms of Service opened');
         }
 
-        // ฟังก์ชันแสดง Google Ads Policy
+        // ฟังก์ชันแสดง Google Ads Policy - DISABLED
         function showAdsPolicy() {
-            const adsModal = document.getElementById('adsModal');
-            adsModal.style.display = 'block';
+            console.log('📺 Google Ads Policy disabled');
             
-            console.log('📺 Google Ads Policy opened');
+            // แสดงข้อความแจ้งให้ทราบว่าโฆษณาถูกปิด
+            Swal.fire({
+                title: '📺 ข้อมูลเกี่ยวกับโฆษณา',
+                text: 'ขณะนี้ระบบได้ปิดการแสดงโฆษณาแล้ว เพื่อประสบการณ์การใช้งานที่ดีขึ้น',
+                icon: 'info',
+                confirmButtonText: 'เข้าใจแล้ว'
+            });
         }
 
         // ปิด modals เมื่อคลิกนอกพื้นที่
         window.addEventListener('click', function(event) {
-            const adModal = document.getElementById('adModal');
+            // const adModal = document.getElementById('adModal'); // DISABLED
             const privacyModal = document.getElementById('privacyModal');
             const termsModal = document.getElementById('termsModal');
-            const adsModalPolicy = document.getElementById('adsModal');
+            // const adsModalPolicy = document.getElementById('adsModal'); // DISABLED
             
-            // ปิด Ad Modal (โฆษณา)
+            // ปิด Ad Modal (โฆษณา) - DISABLED
+            /*
             if (event.target === adModal && adTimeRemaining <= 0) {
                 closeAdModal();
             }
+            */
             
             // ปิด Privacy Modal
             if (event.target === privacyModal) {
@@ -2047,10 +2034,12 @@
                 termsModal.style.display = 'none';
             }
             
-            // ปิด Ads Policy Modal
+            // ปิด Ads Policy Modal - DISABLED
+            /*
             if (event.target === adsModalPolicy) {
                 adsModalPolicy.style.display = 'none';
             }
+            */
         });        // เริ่มต้นระบบ Privacy Policy - ปิดใช้งาน
         // document.addEventListener('DOMContentLoaded', function() {
         //     initPrivacyPolicy();
