@@ -64,6 +64,58 @@ const CONFIG = {
 };
 
 // ========== Helper Functions ==========
+
+/**
+ * คำนวณชั่วโมงการทำงานแบบเดียวกันกับ admin stats
+ * @param {string} clockInTime - เวลาเข้างาน
+ * @param {string} [clockOutTime] - เวลาออกงาน (ถ้าไม่ให้จะใช้เวลาปัจจุบัน)
+ * @returns {number} - ชั่วโมงการทำงาน (ทศนิยม)
+ */
+function calculateWorkingHours(clockInTime, clockOutTime = null) {
+  if (!clockInTime) {
+    console.warn('⚠️ No clock in time provided for calculation');
+    return 0;
+  }
+
+  try {
+    // ใช้ logic เดียวกันกับ admin stats
+    const clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE);
+    const endTimeMoment = clockOutTime ? 
+      moment.tz(clockOutTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE) :
+      moment().tz(CONFIG.TIMEZONE);
+
+    if (!clockInMoment.isValid()) {
+      console.error(`❌ Invalid clockInTime format: "${clockInTime}"`);
+      return 0;
+    }
+
+    if (clockOutTime && !endTimeMoment.isValid()) {
+      console.error(`❌ Invalid clockOutTime format: "${clockOutTime}"`);
+      return 0;
+    }
+
+    // คำนวณความแตกต่างของเวลาในหน่วยชั่วโมง (เหมือน admin stats)
+    const hours = endTimeMoment.diff(clockInMoment, 'hours', true);
+
+    // Debug: แสดงการคำนวณ
+    console.log(`⏰ Working hours calculation:`, {
+      clockIn: clockInMoment.format('YYYY-MM-DD HH:mm:ss'),
+      endTime: endTimeMoment.format('YYYY-MM-DD HH:mm:ss'),
+      diffHours: hours.toFixed(2)
+    });
+
+    // ตรวจสอบให้แน่ใจว่าไม่เป็นลบ (ป้องกันปัญหา timezone)
+    if (hours >= 0) {
+      return hours;
+    } else {
+      console.warn(`⚠️ Negative working hours detected: ${hours.toFixed(2)}, setting to 0`);
+      return 0;
+    }
+  } catch (error) {
+    console.error('❌ Error calculating working hours:', error);
+    return 0;
+  }
+}
 // สร้าง hash password (ใช้ในการตั้งรหัสผ่านครั้งแรก)
 async function createPassword(plainPassword) {
   return await bcrypt.hash(plainPassword, 10);
@@ -375,9 +427,15 @@ class GoogleSheetsService {
 
       // บันทึกลง cache
       this.setCache(cacheKey, rows);
+      
+      // เสร็จสิ้น API call
+      apiMonitor.finishCall();
       return rows;
       
     } catch (error) {
+      // เสร็จสิ้น API call แม้จะ error
+      apiMonitor.finishCall();
+      
       console.error(`❌ API Error for ${sheetName}:`, error.message);
       
       // ถ้าเป็น quota error, ใช้ stale cache
@@ -559,48 +617,19 @@ class GoogleSheetsService {
         let workingHours = '0 ชม.';
         
         if (clockInTime) {
-          try {
-            // Debug: แสดงข้อมูลเวลาที่ได้รับ
-            console.log(`🕐 Processing clockInTime: "${clockInTime}" (type: ${typeof clockInTime})`);
-            
-            // ใช้ moment เพื่อจัดการ timezone อย่างถูกต้อง
-            let clockInMoment;
-            
-            if (typeof clockInTime === 'string') {
-              // ระบุ format ให้ชัดเจน และ parse ใน timezone ไทยตั้งแต่แรก
-              clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE);
-            } else {
-              // ถ้าเป็น Date object ให้แปลงเป็น moment ใน timezone ไทย
-              clockInMoment = moment(clockInTime).tz(CONFIG.TIMEZONE);
-            }
-            
-            // เวลาปัจจุบันใน timezone ไทย
-            const nowMoment = moment().tz(CONFIG.TIMEZONE);
-            
-            // คำนวณความแตกต่างของเวลาในหน่วยชั่วโมง
-            const hours = nowMoment.diff(clockInMoment, 'hours', true);
-            
-            // Debug: แสดงการคำนวณ
-            console.log(`⏰ Time calculation:`, {
-              clockIn: clockInMoment.format('YYYY-MM-DD HH:mm:ss'),
-              now: nowMoment.format('YYYY-MM-DD HH:mm:ss'),
-              diffHours: hours.toFixed(2)
-            });
-            
-            // ตรวจสอบให้แน่ใจว่าไม่เป็นลบ (ป้องกันปัญหา timezone)
-            if (hours >= 0) {
-              workingHours = `${hours.toFixed(1)} ชม.`;
-            } else {
-              console.warn(`⚠️ Negative working hours detected: ${hours.toFixed(2)}, setting to 0`);
-              workingHours = '0 ชม.';
-            }
-          } catch (error) {
-            console.error('Error calculating working hours:', error);
+          // 🎯 ใช้ฟังก์ชันคำนวณเวลาแบบเดียวกันกับ clock out
+          const hours = calculateWorkingHours(clockInTime);
+          
+          if (hours > 0) {
+            workingHours = `${hours.toFixed(1)} ชม.`;
+          } else {
             workingHours = '0 ชม.';
           }
-        }        return {
+        }
+
+        return {
           name: row.get('ชื่อพนักงาน') || row.get('ชื่อในระบบ'),
-          clockIn: clockInTime ? moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE).format('HH:mm') : '', // ส่งเฉพาะเวลา HH:mm
+          clockIn: clockInTime ? moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE).format('HH:mm') : '',
           workingHours
         };
       });      const stats = {
@@ -889,9 +918,12 @@ class GoogleSheetsService {
 
   async clockIn(data) {
     try {
-      const { employee, userinfo, lat, lon, line_name, line_picture } = data;
+      const { employee, userinfo, lat, lon, line_name, line_picture, mock_time } = data;
       
       console.log(`⏰ Clock In request for: "${employee}"`);
+      if (mock_time) {
+        console.log(`🧪 Using mock time: ${mock_time}`);
+      }
       
       const employeeStatus = await this.getEmployeeStatus(employee);
       
@@ -906,7 +938,10 @@ class GoogleSheetsService {
         };
       }
 
-      const timestamp = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
+      // ใช้ mock_time หากมีการส่งมา ไม่เช่นนั้นใช้เวลาปัจจุบัน
+      const timestamp = mock_time 
+        ? moment(mock_time).tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss')
+        : moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
       
       // แปลงพิกัดเป็นชื่อสถานที่
       const locationName = await this.getLocationName(lat, lon);
@@ -988,10 +1023,13 @@ class GoogleSheetsService {
 
   async clockOut(data) {
     try {
-      const { employee, lat, lon, line_name } = data;
+      const { employee, lat, lon, line_name, mock_time } = data;
       
       console.log(`⏰ Clock Out request for: "${employee}"`);
       console.log(`📍 Location: ${lat}, ${lon}`);
+      if (mock_time) {
+        console.log(`🧪 Using mock time: ${mock_time}`);
+      }
       
       const employeeStatus = await this.getEmployeeStatus(employee);
         if (!employeeStatus.isOnWork) {
@@ -1027,62 +1065,17 @@ class GoogleSheetsService {
         };
       }
 
-      const timestamp = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss'); // ใช้เวลาไทยในรูปแบบ string
+      // ใช้ mock_time หากมีการส่งมา ไม่เช่นนั้นใช้เวลาปัจจุบัน
+      const timestamp = mock_time 
+        ? moment(mock_time).tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss')
+        : moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
       const workRecord = employeeStatus.workRecord;
-        const clockInTime = workRecord.clockIn;
+      const clockInTime = workRecord.clockIn;
       console.log(`⏰ Clock in time: ${clockInTime}`);
       
-      let hoursWorked = 0;
-      if (clockInTime) {
-        console.log(`🕐 Raw clockInTime: "${clockInTime}" (type: ${typeof clockInTime})`);
-        
-        // ใช้ moment สำหรับการคำนวณเวลาที่แม่นยำ
-        let clockInMoment;
-        
-        // 🔧 แก้ไข: ระบุ format ให้ชัดเจนตาม timezone
-        if (typeof clockInTime === 'string') {
-          // ลองหลาย format ที่เป็นไปได้
-          if (clockInTime.includes('T')) {
-            // ISO format: 2025-06-27T14:30:00.000Z
-            clockInMoment = moment(clockInTime).tz(CONFIG.TIMEZONE);
-          } else if (clockInTime.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
-            // YYYY-MM-DD HH:mm:ss format
-            clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD HH:mm:ss', CONFIG.TIMEZONE);
-          } else if (clockInTime.match(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/)) {
-            // DD/MM/YYYY HH:mm:ss format
-            clockInMoment = moment.tz(clockInTime, 'DD/MM/YYYY HH:mm:ss', CONFIG.TIMEZONE);
-          } else {
-            // Fallback: ให้ moment ลอง parse เอง
-            clockInMoment = moment(clockInTime).tz(CONFIG.TIMEZONE);
-          }
-        } else {
-          // ถ้าเป็น Date object
-          clockInMoment = moment(clockInTime).tz(CONFIG.TIMEZONE);
-        }
-        
-        const timestampMoment = moment().tz(CONFIG.TIMEZONE);
-        
-        // ตรวจสอบว่า moment object ถูกต้องหรือไม่
-        if (!clockInMoment.isValid()) {
-          console.error(`❌ Invalid clockInTime format: "${clockInTime}"`);
-          hoursWorked = 0;
-        } else {
-          hoursWorked = timestampMoment.diff(clockInMoment, 'hours', true); // true = ให้ทศนิยม
-          
-          // Debug information
-          console.log(`🕐 Parsed clockIn: ${clockInMoment.format('YYYY-MM-DD HH:mm:ss')}`);
-          console.log(`🕑 Current time: ${timestampMoment.format('YYYY-MM-DD HH:mm:ss')}`);
-          console.log(`⏱️ Hours worked: ${hoursWorked.toFixed(2)}`);
-          
-          // ตรวจสอบผลลัพธ์ที่สมเหตุสมผล
-          if (hoursWorked < 0) {
-            console.warn(`⚠️ Negative hours detected (${hoursWorked.toFixed(2)}), setting to 0`);
-            hoursWorked = 0;
-          } else if (hoursWorked > 24) {
-            console.warn(`⚠️ Hours > 24 detected (${hoursWorked.toFixed(2)}), possible timezone issue`);
-          }
-        }
-      }
+      // 🎯 ใช้ฟังก์ชันคำนวณเวลาแบบเดียวกันกับ admin stats
+      const hoursWorked = calculateWorkingHours(clockInTime, timestamp);
+      console.log(`✅ Working hours calculated: ${hoursWorked.toFixed(2)} hours`);
       
       // แปลงพิกัดเป็นชื่อสถานที่
       const locationName = await this.getLocationName(lat, lon);
@@ -1444,13 +1437,12 @@ class GoogleSheetsService {
   // ฟังก์ชันสำหรับประมวลผลลืมลงเวลาออกของพนักงานคนหนึ่ง
   async processMissedCheckout({ employeeName, clockInTime, mainRowIndex, cutoffTime, workRow }) {
     try {
-      // คำนวณชั่วโมงทำงาน (จากเวลาเข้าถึงเวลา cutoff)
-      const clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE);
-      const hoursWorked = cutoffTime.diff(clockInMoment, 'hours', true);
+      // 🎯 ใช้ฟังก์ชันคำนวณเวลาแบบเดียวกันกับ clock out
+      const autoClockOutTime = cutoffTime.format('YYYY-MM-DD HH:mm:ss');
+      const hoursWorked = calculateWorkingHours(clockInTime, autoClockOutTime);
       
       // ข้อความที่จะเขียนลง sheet
       const missedCheckoutNote = 'ลืมลงเวลาออก (ระบบอัตโนมัติ)';
-      const autoClockOutTime = cutoffTime.format('YYYY-MM-DD HH:mm:ss');
       
       console.log(`⏰ Auto clock out for ${employeeName}: ${autoClockOutTime} (${hoursWorked.toFixed(2)} hours)`);
 
@@ -2032,8 +2024,22 @@ app.get('/api/admin/export/:type', authenticateAdmin, async (req, res) => {
 class APIMonitor {
   constructor() {
     this.apiCalls = [];
-    this.maxCallsPerMinute = 30; // จำกัด API calls ไม่เกิน 30 ครั้งต่อนาที
-    this.maxCallsPerHour = 300; // จำกัด API calls ไม่เกิน 300 ครั้งต่อชั่วโมง
+    // ปรับเพิ่ม rate limit เพื่อรองรับ concurrent users มากขึ้น
+    this.maxCallsPerMinute = 100; // เพิ่มจาก 30 เป็น 100 ครั้งต่อนาที
+    this.maxCallsPerHour = 1000; // เพิ่มจาก 300 เป็น 1000 ครั้งต่อชั่วโมง
+    
+    // เพิ่ม burst allowance สำหรับ peak time
+    this.burstLimit = 75; // เพิ่มจาก 50 เป็น 75 concurrent requests
+    this.currentBurst = 0;
+    this.lastBurstReset = Date.now();
+    
+    // Auto-reset burst counter every 5 seconds
+    setInterval(() => {
+      if (this.currentBurst > 0) {
+        console.log(`🔄 Auto-resetting burst counter from ${this.currentBurst} to 0`);
+        this.currentBurst = 0;
+      }
+    }, 5000); // 5 วินาที
   }
 
   logAPICall(operation) {
@@ -2048,7 +2054,7 @@ class APIMonitor {
       (now - call.timestamp) < 3600000 // 1 hour
     );
 
-    console.log(`📊 API Call: ${operation} (Total in last hour: ${this.apiCalls.length})`);
+    console.log(`📊 API Call: ${operation} (Total in last hour: ${this.apiCalls.length}, Current burst: ${this.currentBurst})`);
   }
 
   canMakeAPICall() {
@@ -2062,6 +2068,12 @@ class APIMonitor {
     // นับจำนวน API calls ในชั่วโมงที่แล้ว
     const callsInLastHour = this.apiCalls.length;
 
+    // ตรวจสอบ burst limit
+    if (this.currentBurst >= this.burstLimit) {
+      console.warn(`⚠️ Burst limit exceeded: ${this.currentBurst}/${this.burstLimit} concurrent requests`);
+      return false;
+    }
+
     if (callsInLastMinute >= this.maxCallsPerMinute) {
       console.warn(`⚠️ Rate limit exceeded: ${callsInLastMinute} calls in last minute`);
       return false;
@@ -2072,7 +2084,17 @@ class APIMonitor {
       return false;
     }
 
+    // เพิ่ม burst counter
+    this.currentBurst++;
+
     return true;
+  }
+
+  // เมื่อ API call เสร็จแล้ว ลด burst counter
+  finishCall() {
+    if (this.currentBurst > 0) {
+      this.currentBurst--;
+    }
   }
 
   getStats() {
@@ -2214,7 +2236,7 @@ app.post('/api/employees', async (req, res) => {
 // Clock in
 app.post('/api/clockin', async (req, res) => {
   try {
-    const { employee, userinfo, lat, lon, line_name, line_picture } = req.body;
+    const { employee, userinfo, lat, lon, line_name, line_picture, mock_time } = req.body;
     
     if (!employee || !lat || !lon) {
       return res.status(400).json({
@@ -2233,12 +2255,17 @@ app.post('/api/clockin', async (req, res) => {
 
     apiMonitor.logAPICall('clockIn');
     const result = await sheetsService.clockIn({
-      employee, userinfo, lat, lon, line_name, line_picture
+      employee, userinfo, lat, lon, line_name, line_picture, mock_time
     });
+    
+    // ลด burst counter หลังจาก API call เสร็จ
+    apiMonitor.finishCall();
 
     res.json(result);
     
   } catch (error) {
+    // ลด burst counter ถึงแม้จะ error
+    apiMonitor.finishCall();
     console.error('API Error - clockin:', error);
     res.status(500).json({
       success: false,
@@ -2250,7 +2277,7 @@ app.post('/api/clockin', async (req, res) => {
 // Clock out
 app.post('/api/clockout', async (req, res) => {
   try {
-    const { employee, lat, lon, line_name } = req.body;
+    const { employee, lat, lon, line_name, mock_time } = req.body;
     
     if (!employee || !lat || !lon) {
       return res.status(400).json({
@@ -2269,12 +2296,17 @@ app.post('/api/clockout', async (req, res) => {
 
     apiMonitor.logAPICall('clockOut');
     const result = await sheetsService.clockOut({
-      employee, lat, lon, line_name
+      employee, lat, lon, line_name, mock_time
     });
+    
+    // ลด burst counter หลังจาก API call เสร็จ
+    apiMonitor.finishCall();
 
     res.json(result);
     
   } catch (error) {
+    // ลด burst counter ถึงแม้จะ error
+    apiMonitor.finishCall();
     console.error('API Error - clockout:', error);
     res.status(500).json({
       success: false,

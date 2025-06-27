@@ -1,17 +1,21 @@
 // Service Worker for PWA
-const CACHE_NAME = 'time-tracker-v2.1.4';
+const CACHE_NAME = 'time-tracker-v2.1.5';
 const urlsToCache = [
   '/',
   '/index.html',
   '/admin',
   '/admin.html',
+  '/admin/login',
   '/login.html',
+  '/manifest.json',
   '/favicon.ico',
   // CDN resources
   'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js',
-  'https://cdn.jsdelivr.net/npm/sweetalert2@11'
+  'https://cdn.jsdelivr.net/npm/sweetalert2@11',
+  'https://code.jquery.com/jquery-3.6.0.min.js',
+  'https://code.jquery.com/ui/1.13.2/jquery-ui.min.js'
 ];
 
 // Install event
