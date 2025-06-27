@@ -4,7 +4,20 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-adsense-account" content="ca-pub-1797172064583364">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="ลงเวลา อบต.ข่าใหญ่">
+    <meta name="description" content="ระบบจัดการลงเวลาเข้า-ออกงาน องค์การบริหารส่วนตำบลข่าใหญ่">
+    <meta name="theme-color" content="#007bff">
+    
+    <!-- PWA Icons and Manifest -->
+    <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="https://www.huana-nbp.go.th/index/add_file/P0D284NMon35557.png" type="image/png">
+    <link rel="apple-touch-icon" href="https://www.huana-nbp.go.th/index/add_file/P0D284NMon35557.png">
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 
@@ -2053,5 +2066,135 @@
     
     <!-- LIFF SDK (สำหรับ LINE) -->
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js')
+                .then(function(registration) {
+                    console.log('✅ ServiceWorker registered successfully:', registration.scope);
+                    
+                    // Check for updates
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                // New content is available
+                                if (confirm('มีการอัปเดตใหม่ ต้องการรีเฟรชหน้าเว็บไหม?')) {
+                                    window.location.reload();
+                                }
+                            }
+                        });
+                    });
+                })
+                .catch(function(err) {
+                    console.log('❌ ServiceWorker registration failed:', err);
+                });
+            });
+        }
+
+        // PWA Install Prompt
+        let deferredPrompt;
+        const installButton = document.getElementById('installButton');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('📱 PWA install prompt triggered');
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install button
+            if (installButton) {
+                installButton.style.display = 'block';
+            } else {
+                // Create install banner if button doesn't exist
+                showInstallBanner();
+            }
+        });
+
+        function showInstallBanner() {
+            const banner = document.createElement('div');
+            banner.innerHTML = `
+                <div class="alert alert-info alert-dismissible fade show position-fixed" 
+                     style="top: 10px; right: 10px; z-index: 9999; max-width: 300px;">
+                    <strong>📱 ติดตั้งแอป</strong><br>
+                    ติดตั้งระบบลงเวลาลงมือถือเพื่อใช้งานง่ายขึ้น
+                    <button type="button" class="btn btn-sm btn-primary ms-2" onclick="installPWA()">
+                        ติดตั้ง
+                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            document.body.appendChild(banner);
+            
+            // Auto hide after 10 seconds
+            setTimeout(() => {
+                const alert = banner.querySelector('.alert');
+                if (alert) {
+                    alert.remove();
+                }
+            }, 10000);
+        }
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('✅ User accepted the PWA install prompt');
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'ติดตั้งสำเร็จ!',
+                            text: 'แอปได้ถูกติดตั้งลงในมือถือแล้ว',
+                            timer: 3000
+                        });
+                    } else {
+                        console.log('❌ User dismissed the PWA install prompt');
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        // Handle app installation
+        window.addEventListener('appinstalled', (evt) => {
+            console.log('✅ PWA was installed successfully');
+            // Hide install button
+            const installBtn = document.getElementById('installButton');
+            if (installBtn) {
+                installBtn.style.display = 'none';
+            }
+        });
+
+        // Handle PWA launch via shortcut
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const action = urlParams.get('action');
+            
+            if (action === 'clockin') {
+                // Auto trigger clock in
+                setTimeout(() => {
+                    const clockInBtn = document.querySelector('[onclick*="clockIn"]');
+                    if (clockInBtn) {
+                        clockInBtn.click();
+                    }
+                }, 1000);
+            } else if (action === 'clockout') {
+                // Auto trigger clock out
+                setTimeout(() => {
+                    const clockOutBtn = document.querySelector('[onclick*="clockOut"]');
+                    if (clockOutBtn) {
+                        clockOutBtn.click();
+                    }
+                }, 1000);
+            } else if (action === 'status') {
+                // Auto check status
+                setTimeout(() => {
+                    checkCurrentStatus();
+                }, 1000);
+            }
+        });
+    </script>
 </body>
 </html>

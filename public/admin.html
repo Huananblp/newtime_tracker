@@ -640,7 +640,7 @@
                             </div>
                             <div class="col-md-3">
                                 <div class="form-group">
-                                    <label class="form-label">ปี</label>
+                                    <label class="form-label">ปี พ.ศ.</label>
                                     <select class="form-select" id="yearSelect">
                                         <!-- ปีจะถูกเพิ่มด้วย JavaScript -->
                                     </select>
@@ -729,7 +729,7 @@
     
     <script>
         // การตั้งค่าพื้นฐาน
-        const API_BASE_URL = window.location.origin + '/api';
+        const API_BASE_URL = window.location.origin;
         let currentUser = null;
         
         // ตรวจสอบการล็อกอิน
@@ -801,7 +801,7 @@
         async function loadStats() {
             try {
                 const token = localStorage.getItem('adminToken');
-                const response = await fetch(`${API_BASE_URL}/admin/stats`, {
+                const response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -1082,109 +1082,60 @@
         async function exportDaily() {
             const date = document.getElementById('dailyDate').value;
             if (!date) {
-                Swal.fire('โปรดเลือกวันที่', '', 'warning');
+                Swal.fire({
+                    title: 'โปรดเลือกวันที่',
+                    text: 'กรุณาเลือกวันที่ที่ต้องการสร้างรายงาน',
+                    icon: 'warning'
+                });
+                return;
+            }
+            
+            // ตรวจสอบวันที่ไม่เกินวันปัจจุบัน
+            const selectedDate = new Date(date);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // ให้เลือกได้ถึงวันปัจจุบัน
+            
+            if (selectedDate > today) {
+                Swal.fire({
+                    title: 'วันที่ไม่ถูกต้อง',
+                    text: 'ไม่สามารถสร้างรายงานสำหรับวันที่ในอนาคตได้',
+                    icon: 'warning'
+                });
                 return;
             }
             
             await downloadReport('daily', { date });
         }
-          async function exportMonthly() {
+        async function exportMonthly() {
             const month = document.getElementById('monthSelect').value;
             const year = document.getElementById('yearSelect').value;
             const format = document.getElementById('reportFormat').value;
             
-            if (format === 'detailed') {
-                // ใช้ API แบบละเอียดที่แสดงแต่ละวันชัดเจน
-                await downloadDetailedMonthlyReport(month, year);
-            } else {
-                // ใช้รายงานสรุปแบบเดิม
-                await downloadReport('monthly', { month, year });
+            if (!month || !year) {
+                Swal.fire({
+                    title: 'ข้อมูลไม่ครบถ้วน',
+                    text: 'กรุณาเลือกเดือนและปีที่ต้องการสร้างรายงาน',
+                    icon: 'warning'
+                });
+                return;
             }
-        }
-        
-        // ฟังก์ชันสำหรับดาวน์โหลดรายงานรายเดือนแบบละเอียด
-        async function downloadDetailedMonthlyReport(month, year) {
-            try {
-                // แสดง loading
+            
+            // ตรวจสอบไม่ให้เลือกเดือนในอนาคต
+            const selectedDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+            const today = new Date();
+            const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            
+            if (selectedDate > currentMonth) {
                 Swal.fire({
-                    title: 'กำลังสร้างรายงานแบบละเอียด...',
-                    html: 'โปรดรอสักครู่ กำลังสร้างรายงานที่แสดงแต่ละวันชัดเจน',
-                    allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
+                    title: 'เดือน/ปี ไม่ถูกต้อง',
+                    text: 'ไม่สามารถสร้างรายงานสำหรับเดือนในอนาคตได้',
+                    icon: 'warning'
                 });
-                  const token = localStorage.getItem('adminToken');
-                
-                const response = await fetch(`${API_BASE_URL}/reports/export-monthly-detailed`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        month: parseInt(month),
-                        year: parseInt(year),
-                        options: {
-                            showDailyBreakdown: true,
-                            showWeekends: true,
-                            showSummary: true,
-                            colorCoding: true
-                        }
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to generate detailed report');
-                }
-                
-                // ดาวน์โหลดไฟล์
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                
-                // ตั้งชื่อไฟล์
-                const monthNames = [
-                    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-                    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-                ];
-                const filename = `รายงานรายเดือน_${monthNames[month-1]}_${parseInt(year)+543}_แบ่งวันชัดเจน.xlsx`;
-                a.download = filename;
-                
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-                
-                Swal.fire({
-                    icon: 'success',
-                    title: 'สร้างรายงานสำเร็จ!',
-                    html: `
-                        <div style="text-align: left;">
-                            <p><strong>รายงานที่สร้าง:</strong> รายงานรายเดือนแบบละเอียด</p>
-                            <p><strong>รูปแบบ:</strong> แสดงแต่ละวันของเดือนอย่างชัดเจน</p>
-                            <p><strong>คุณสมบัติ:</strong></p>
-                            <ul>
-                                <li>แสดงข้อมูลทุกวันในเดือน</li>
-                                <li>ใช้สีแยกแยะสถานะ (เข้างาน, ขาด, ลา)</li>
-                                <li>แสดงเวลาที่มาสาย</li>
-                                <li>รวมสรุปจำนวนวันต่างๆ</li>
-                            </ul>
-                        </div>
-                    `,
-                    timer: 5000,
-                    showConfirmButton: true
-                });
-                
-            } catch (error) {
-                console.error('Export error:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'เกิดข้อผิดพลาด',
-                    text: 'ไม่สามารถสร้างรายงานได้ กรุณาลองใหม่อีกครั้ง'
-                });
+                return;
             }
+            
+            // ส่ง format parameter ไปใน query string เพื่อให้ backend สร้างรายงานตามรูปแบบที่เลือก
+            await downloadReport('monthly', { month, year, format });
         }
         
         async function exportRange() {
@@ -1192,12 +1143,47 @@
             const endDate = document.getElementById('endDate').value;
             
             if (!startDate || !endDate) {
-                Swal.fire('โปรดเลือกวันที่เริ่มต้นและสิ้นสุด', '', 'warning');
+                Swal.fire({
+                    title: 'ข้อมูลไม่ครบถ้วน',
+                    text: 'กรุณาเลือกวันที่เริ่มต้นและวันที่สิ้นสุดที่ต้องการสร้างรายงาน',
+                    icon: 'warning'
+                });
                 return;
             }
             
             if (startDate > endDate) {
-                Swal.fire('วันที่เริ่มต้นต้องไม่เกินวันที่สิ้นสุด', '', 'warning');
+                Swal.fire({
+                    title: 'วันที่ไม่ถูกต้อง',
+                    text: 'วันที่เริ่มต้นต้องไม่เกินวันที่สิ้นสุด',
+                    icon: 'warning'
+                });
+                return;
+            }
+            
+            // ตรวจสอบช่วงวันที่ไม่เกิน 366 วัน (1 ปี)
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays > 366) {
+                Swal.fire({
+                    title: 'ช่วงวันที่มากเกินไป',
+                    text: 'กรุณาเลือกช่วงวันที่ไม่เกิน 1 ปี เพื่อประสิทธิภาพในการสร้างรายงาน',
+                    icon: 'warning'
+                });
+                return;
+            }
+            
+            // ตรวจสอบวันที่ไม่เกินวันปัจจุบัน
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+            
+            if (end > today) {
+                Swal.fire({
+                    title: 'วันที่ไม่ถูกต้อง',
+                    text: 'ไม่สามารถสร้างรายงานสำหรับวันที่ในอนาคตได้',
+                    icon: 'warning'
+                });
                 return;
             }
             
@@ -1207,27 +1193,40 @@
         // ดาวน์โหลดรายงาน
         async function downloadReport(type, params) {
             try {
-                // แสดง loading
+                // แสดง loading พร้อมข้อมูลที่กำลังประมวลผล
+                const loadingTitle = getLoadingTitle(type, params);
                 Swal.fire({
                     title: 'กำลังสร้างรายงาน...',
-                    html: 'โปรดรอสักครู่',
+                    html: `${loadingTitle}<br><small class="text-muted">โปรดรอสักครู่ ระบบกำลังดึงข้อมูลและสร้างไฟล์ Excel</small>`,
                     allowOutsideClick: false,
+                    showConfirmButton: false,
                     didOpen: () => {
                         Swal.showLoading();
                     }
                 });
                 
                 const token = localStorage.getItem('adminToken');
+                if (!token) {
+                    throw new Error('ไม่พบ Token การเข้าสู่ระบบ');
+                }
+                
                 const queryString = new URLSearchParams(params).toString();
                 
-                const response = await fetch(`${API_BASE_URL}/admin/export/${type}?${queryString}`, {
+                const response = await fetch(`${API_BASE_URL}/api/admin/export/${type}?${queryString}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to generate report');
+                    const errorData = await response.json().catch(() => null);
+                    throw new Error(errorData?.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                // ตรวจสอบ Content-Type
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) {
+                    throw new Error('ไฟล์ที่ได้รับไม่ใช่ไฟล์ Excel ที่ถูกต้อง');
                 }
                 
                 // ดาวน์โหลดไฟล์
@@ -1245,36 +1244,164 @@
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
                 
+                // แสดงผลสำเร็จพร้อมรายละเอียด
                 Swal.fire({
                     icon: 'success',
-                    title: 'ส่งออกสำเร็จ!',
-                    text: 'ไฟล์ถูกดาวน์โหลดแล้ว',
-                    timer: 2000,
-                    showConfirmButton: false
+                    title: 'ส่งออกรายงานสำเร็จ!',
+                    html: getSuccessMessage(type, params, filename),
+                    timer: 4000,
+                    showConfirmButton: true,
+                    confirmButtonText: 'ตกลง'
                 });
                 
             } catch (error) {
                 console.error('Export error:', error);
                 Swal.fire({
                     icon: 'error',
-                    title: 'เกิดข้อผิดพลาด',
-                    text: 'ไม่สามารถส่งออกรายงานได้ กรุณาลองใหม่อีกครั้ง'
+                    title: 'เกิดข้อผิดพลาดในการส่งออกรายงาน',
+                    html: `
+                        <div style="text-align: left;">
+                            <p><strong>รายละเอียดข้อผิดพลาด:</strong></p>
+                            <p class="text-danger">${error.message}</p>
+                            <hr>
+                            <p><strong>แนวทางแก้ไข:</strong></p>
+                            <ul>
+                                <li>ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต</li>
+                                <li>ลองเข้าสู่ระบบใหม่</li>
+                                <li>ตรวจสอบว่าข้อมูลในช่วงที่เลือกมีอยู่จริง</li>
+                                <li>ลองเลือกช่วงวันที่ที่น้อยกว่า</li>
+                            </ul>
+                        </div>
+                    `,
+                    showConfirmButton: true,
+                    confirmButtonText: 'ตกลง'
                 });
             }
+        }
+        
+        // ฟังก์ชันช่วยเหลือสำหรับ Export
+        function getLoadingTitle(type, params) {
+            switch (type) {
+                case 'daily':
+                    return `กำลังสร้างรายงานรายวัน: ${formatDateThai(params.date)}`;
+                case 'monthly':
+                    const monthNames = [
+                        'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                        'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+                    ];
+                    return `กำลังสร้างรายงานรายเดือน: ${monthNames[params.month-1]} ${parseInt(params.year)+543}`;
+                case 'range':
+                    return `กำลังสร้างรายงานช่วงวันที่: ${formatDateThai(params.startDate)} - ${formatDateThai(params.endDate)}`;
+                default:
+                    return 'กำลังสร้างรายงาน';
+            }
+        }
+        
+        function getSuccessMessage(type, params, filename) {
+            const details = getReportDetails(type, params);
+            return `
+                <div style="text-align: left;">
+                    <p><strong>ไฟล์:</strong> ${filename}</p>
+                    <p><strong>ประเภทรายงาน:</strong> ${details.title}</p>
+                    <p><strong>ช่วงข้อมูล:</strong> ${details.period}</p>
+                    <hr>
+                    <p><strong>คุณสมบัติรายงาน:</strong></p>
+                    <ul>
+                        <li>ข้อมูลเวลาเข้า-ออกงาน</li>
+                        <li>การคำนวณชั่วโมงทำงาน</li>
+                        <li>สถิติการทำงาน</li>
+                        <li>เน้นสีแยกแยะสถานะต่างๆ</li>
+                        <li>ส่วนหัวและส่วนท้ายรายงาน</li>
+                    </ul>
+                </div>
+            `;
+        }
+        
+        function getReportDetails(type, params) {
+            switch (type) {
+                case 'daily':
+                    return {
+                        title: 'รายงานรายวัน',
+                        period: formatDateThai(params.date)
+                    };
+                case 'monthly':
+                    const monthNames = [
+                        'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                        'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+                    ];
+                    return {
+                        title: 'รายงานรายเดือน',
+                        period: `${monthNames[params.month-1]} ${parseInt(params.year)+543}`
+                    };
+                case 'range':
+                    return {
+                        title: 'รายงานช่วงวันที่',
+                        period: `${formatDateThai(params.startDate)} ถึง ${formatDateThai(params.endDate)}`
+                    };
+                default:
+                    return { title: 'รายงาน', period: 'ไม่ระบุ' };
+            }
+        }
+        
+        function formatDateThai(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('th-TH', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'Asia/Bangkok'
+            });
         }
         
         // สร้างชื่อไฟล์
         function getFilename(type, params) {
             const now = new Date();
-            const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+            const thaiDate = now.toLocaleDateString('th-TH', { 
+                timeZone: 'Asia/Bangkok',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).replace(/\//g, '');
+            const thaiTime = now.toLocaleTimeString('th-TH', { 
+                timeZone: 'Asia/Bangkok',
+                hour: '2-digit',
+                minute: '2-digit'
+            }).replace(/:/g, '');
+            
+            const timestamp = `${thaiDate}_${thaiTime}`;
             
             switch (type) {
                 case 'daily':
-                    return `รายงานรายวัน_${params.date}_${timestamp}.xlsx`;
+                    const dailyDate = new Date(params.date).toLocaleDateString('th-TH', { 
+                        timeZone: 'Asia/Bangkok',
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                    }).replace(/\//g, '');
+                    return `รายงานรายวัน_${dailyDate}_${timestamp}.xlsx`;
+                    
                 case 'monthly':
-                    return `รายงานรายเดือน_${params.month}-${params.year}_${timestamp}.xlsx`;
+                    const monthNames = [
+                        'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+                        'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+                    ];
+                    const yearBE = parseInt(params.year) + 543;
+                    const formatSuffix = params.format === 'detailed' ? '_แบ่งวันชัดเจน' : '';
+                    return `รายงานรายเดือน_${monthNames[params.month-1]}${yearBE}${formatSuffix}_${timestamp}.xlsx`;
+                    
                 case 'range':
-                    return `รายงานช่วงวันที่_${params.startDate}_${params.endDate}_${timestamp}.xlsx`;
+                    const startDate = new Date(params.startDate).toLocaleDateString('th-TH', { 
+                        timeZone: 'Asia/Bangkok',
+                        month: '2-digit',
+                        day: '2-digit'
+                    }).replace(/\//g, '');
+                    const endDate = new Date(params.endDate).toLocaleDateString('th-TH', { 
+                        timeZone: 'Asia/Bangkok',
+                        month: '2-digit',
+                        day: '2-digit'
+                    }).replace(/\//g, '');
+                    return `รายงานช่วงวันที่_${startDate}-${endDate}_${timestamp}.xlsx`;
+                    
                 default:
                     return `รายงาน_${timestamp}.xlsx`;
             }
@@ -1311,7 +1438,7 @@
                 month: 'numeric', 
                 timeZone: 'Asia/Bangkok' 
             });
-            const thaiYear = today.toLocaleDateString('th-TH', { 
+            const thaiYear = today.toLocaleDateString('en-CA', { 
                 year: 'numeric', 
                 timeZone: 'Asia/Bangkok' 
             });
@@ -1320,11 +1447,11 @@
             
             // สร้างรายการปี
             const yearSelect = document.getElementById('yearSelect');
-            const currentYear = parseInt(thaiYear);
+            const currentYear = parseInt(thaiYear); // ใช้ปี ค.ศ. จาก en-CA
             for (let year = currentYear; year >= currentYear - 5; year--) {
                 const option = document.createElement('option');
-                option.value = year;
-                option.textContent = year + 543; // แปลงเป็น พ.ศ.
+                option.value = year; // เก็บเป็น ค.ศ. สำหรับส่งไป backend
+                option.textContent = (year + 543) + ' (พ.ศ.)'; // แสดงเป็น พ.ศ. ให้ผู้ใช้เห็น
                 if (year === currentYear) option.selected = true;
                 yearSelect.appendChild(option);
             }

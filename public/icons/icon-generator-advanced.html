@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สร้างไอคอน PWA - ระบบลงเวลาออนไลน์ อบต.ข่าใหญ่</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Sarabun', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c5aa0 0%, #1e4080 50%, #152d5f 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .header p {
+            margin: 10px 0 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        .content {
+            padding: 40px;
+        }
+        .preview-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .icon-preview {
+            display: inline-block;
+            margin: 20px;
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .icon-preview:hover {
+            transform: translateY(-5px);
+        }
+        .main-icon {
+            width: 256px;
+            height: 256px;
+            border-radius: 20%;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .size-icons {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .size-icon {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .instructions {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
+            border-left: 5px solid #2c5aa0;
+        }
+        .instructions h3 {
+            color: #2c5aa0;
+            margin-top: 0;
+        }
+        .download-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 5px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40,167,69,0.3);
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .feature-card {
+            background: linear-gradient(135deg, #fff, #f8f9fa);
+            padding: 25px;
+            border-radius: 15px;
+            border: 1px solid #e9ecef;
+            text-align: center;
+        }
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏛️ ระบบลงเวลาออนไลน์ อบต.ข่าใหญ่</h1>
+            <p>สร้างไอคอน PWA สำหรับติดตั้งลงมือถือ</p>
+        </div>
+
+        <div class="content">
+            <div class="preview-section">
+                <h2>🎨 ไอคอนหลักของระบบ</h2>
+                <div class="icon-preview">
+                    <!-- Main SVG Icon -->
+                    <svg class="main-icon" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#2c5aa0;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#1e4080;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#152d5f;stop-opacity:1" />
+                            </linearGradient>
+                            <linearGradient id="clockGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95" />
+                                <stop offset="100%" style="stop-color:#f8f9fa;stop-opacity:0.9" />
+                            </linearGradient>
+                            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                                <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+                            </filter>
+                            <filter id="innerShadow" x="-50%" y="-50%" width="200%" height="200%">
+                                <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.1"/>
+                            </filter>
+                        </defs>
+                        
+                        <!-- Background -->
+                        <rect width="512" height="512" rx="80" fill="url(#bgGrad)" filter="url(#shadow)"/>
+                        
+                        <!-- Border -->
+                        <rect x="20" y="20" width="472" height="472" rx="60" fill="none" stroke="#ffd700" stroke-width="3" opacity="0.8"/>
+                        
+                        <!-- Clock Face -->
+                        <circle cx="256" cy="256" r="120" fill="url(#clockGrad)" filter="url(#innerShadow)"/>
+                        <circle cx="256" cy="256" r="118" fill="none" stroke="#2c5aa0" stroke-width="2"/>
+                        
+                        <!-- Clock Numbers -->
+                        <text x="256" y="150" text-anchor="middle" dominant-baseline="middle" fill="#2c5aa0" font-size="24" font-weight="bold" font-family="Arial">12</text>
+                        <text x="350" y="265" text-anchor="middle" dominant-baseline="middle" fill="#2c5aa0" font-size="24" font-weight="bold" font-family="Arial">3</text>
+                        <text x="256" y="375" text-anchor="middle" dominant-baseline="middle" fill="#2c5aa0" font-size="24" font-weight="bold" font-family="Arial">6</text>
+                        <text x="162" y="265" text-anchor="middle" dominant-baseline="middle" fill="#2c5aa0" font-size="24" font-weight="bold" font-family="Arial">9</text>
+                        
+                        <!-- Clock Hands -->
+                        <line x1="256" y1="256" x2="256" y2="180" stroke="#dc3545" stroke-width="6" stroke-linecap="round"/>
+                        <line x1="256" y1="256" x2="190" y2="256" stroke="#dc3545" stroke-width="4" stroke-linecap="round"/>
+                        <circle cx="256" cy="256" r="8" fill="#dc3545"/>
+                        
+                        <!-- Digital Display -->
+                        <rect x="210" y="300" width="92" height="28" rx="14" fill="#1a1a1a" opacity="0.9"/>
+                        <text x="256" y="320" text-anchor="middle" dominant-baseline="middle" fill="#00ff00" font-size="16" font-weight="bold" font-family="monospace">09:00</text>
+                        
+                        <!-- Thai Text -->
+                        <text x="256" y="420" text-anchor="middle" dominant-baseline="middle" fill="#ffd700" font-size="32" font-weight="bold" font-family="Arial, sans-serif">ลงเวลา</text>
+                        <text x="256" y="450" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="16" font-weight="normal" font-family="Arial, sans-serif">อบต.ข่าใหญ่</text>
+                        
+                        <!-- Location Pin -->
+                        <g transform="translate(380, 80)">
+                            <circle cx="0" cy="0" r="12" fill="#28a745"/>
+                            <circle cx="0" cy="-3" r="4" fill="#ffffff"/>
+                            <path d="M 0,-8 L -6,8 L 6,8 Z" fill="#28a745"/>
+                        </g>
+                        
+                        <!-- Check Mark -->
+                        <g transform="translate(100, 400)">
+                            <circle cx="0" cy="0" r="16" fill="#28a745"/>
+                            <path d="M -8,0 L -3,5 L 8,-6" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        </g>
+                    </svg>
+                    <h3>ไอคอนหลัก 512x512</h3>
+                    <button class="download-btn" onclick="downloadIcon(this.previousElementSibling.previousElementSibling, 512, 'icon-512x512')">📥 ดาวน์โหลด PNG</button>
+                </div>
+            </div>
+
+            <div class="size-icons">
+                <div class="size-icon">
+                    <svg width="72" height="72" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="bgGrad72" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#2c5aa0;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#1e4080;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#152d5f;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="512" height="512" rx="80" fill="url(#bgGrad72)"/>
+                        <circle cx="256" cy="256" r="120" fill="white" opacity="0.9"/>
+                        <text x="256" y="420" text-anchor="middle" dominant-baseline="middle" fill="#ffd700" font-size="32" font-weight="bold">ลง</text>
+                        <text x="256" y="450" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="16">อบต.</text>
+                    </svg>
+                    <div>72x72</div>
+                    <button class="download-btn" onclick="downloadIconSimple(72, 'icon-72x72')">📥 ดาวน์โหลด</button>
+                </div>
+
+                <div class="size-icon">
+                    <svg width="192" height="192" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="bgGrad192" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#2c5aa0;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#1e4080;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#152d5f;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="512" height="512" rx="80" fill="url(#bgGrad192)"/>
+                        <circle cx="256" cy="256" r="120" fill="white" opacity="0.9"/>
+                        <circle cx="256" cy="256" r="8" fill="#dc3545"/>
+                        <text x="256" y="420" text-anchor="middle" dominant-baseline="middle" fill="#ffd700" font-size="32" font-weight="bold">ลงเวลา</text>
+                        <text x="256" y="450" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="16">อบต.ข่าใหญ่</text>
+                    </svg>
+                    <div>192x192</div>
+                    <button class="download-btn" onclick="downloadIconSimple(192, 'icon-192x192')">📥 ดาวน์โหลด</button>
+                </div>
+            </div>
+
+            <div class="instructions">
+                <h3>📋 วิธีใช้ไอคอนเหล่านี้</h3>
+                <ol>
+                    <li><strong>ดาวน์โหลดไอคอน:</strong> คลิกปุ่ม "📥 ดาวน์โหลด PNG" เพื่อบันทึกไอคอนในขนาดต่างๆ</li>
+                    <li><strong>บันทึกในโฟลเดอร์:</strong> วางไฟล์ที่ดาวน์โหลดใน <code>public/icons/</code></li>
+                    <li><strong>ใช้ชื่อไฟล์ที่ถูกต้อง:</strong> เช่น <code>icon-72x72.png</code>, <code>icon-192x192.png</code>, <code>icon-512x512.png</code></li>
+                    <li><strong>อัปเดต manifest.json:</strong> เปลี่ยนจาก SVG เป็น PNG หากต้องการ</li>
+                </ol>
+                
+                <h4>🎨 การปรับแต่งเพิ่มเติม</h4>
+                <p>หากต้องการไอคอนที่สวยงามและมีคุณภาพมากขึ้น แนะนำให้ใช้เครื่องมือออนไลน์:</p>
+                <ul>
+                    <li><a href="https://realfavicongenerator.net/" target="_blank" class="download-btn">🌐 Real Favicon Generator</a></li>
+                    <li><a href="https://www.favicon-generator.org/" target="_blank" class="download-btn">🎨 Favicon Generator</a></li>
+                    <li><a href="https://maskable.app/" target="_blank" class="download-btn">📱 Maskable App</a></li>
+                </ul>
+            </div>
+
+            <div class="features">
+                <div class="feature-card">
+                    <div class="feature-icon">🏛️</div>
+                    <h4>การออกแบบ</h4>
+                    <p>ใช้สีธงชาติและสัญลักษณ์ราชการไทย เหมาะสมสำหรับหน่วยงานรัฐ</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⏰</div>
+                    <h4>สัญลักษณ์นาฬิกา</h4>
+                    <p>แสดงความหมายของระบบลงเวลาอย่างชัดเจน ง่ายต่อการจดจำ</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h4>PWA Ready</h4>
+                    <p>ออกแบบให้เหมาะสมกับการติดตั้งบนมือถือทุกระบบ</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">✅</div>
+                    <h4>ใช้งานง่าย</h4>
+                    <p>ไอคอนสื่อสารชัดเจน ผู้ใช้เข้าใจได้ทันที</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function downloadIcon(svgElement, size, filename) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            canvas.width = size;
+            canvas.height = size;
+            
+            const svgData = new XMLSerializer().serializeToString(svgElement);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0, size, size);
+                canvas.toBlob(function(blob) {
+                    const link = document.createElement('a');
+                    link.download = filename + '.png';
+                    link.href = URL.createObjectURL(blob);
+                    link.click();
+                    URL.revokeObjectURL(url);
+                }, 'image/png');
+            };
+            
+            img.src = url;
+        }
+
+        function downloadIconSimple(size, filename) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = size;
+            canvas.height = size;
+            
+            // Create simple icon
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#2c5aa0');
+            gradient.addColorStop(0.5, '#1e4080');
+            gradient.addColorStop(1, '#152d5f');
+            
+            // Background
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Clock face
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size*0.23, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Center dot
+            ctx.fillStyle = '#dc3545';
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size*0.015, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Text
+            ctx.fillStyle = '#ffd700';
+            ctx.font = `bold ${size*0.08}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText('ลงเวลา', size/2, size*0.85);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `${size*0.04}px Arial`;
+            ctx.fillText('อบต.ข่าใหญ่', size/2, size*0.92);
+            
+            canvas.toBlob(function(blob) {
+                const link = document.createElement('a');
+                link.download = filename + '.png';
+                link.href = URL.createObjectURL(blob);
+                link.click();
+            }, 'image/png');
+        }
+    </script>
+</body>
+</html>
