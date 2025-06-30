@@ -735,14 +735,14 @@ class GoogleSheetsService {
         console.log(`   Column 1: "${firstRow._rawData[1]}" (should be Line name)`);
         console.log(`   Column 2: "${firstRow._rawData[2]}" (should be รูปภาพ)`);
         console.log(`   Column 3: "${firstRow._rawData[3]}" (should be เวลาเข้า)`);
-        console.log(`   Column 4: "${firstRow._rawData[4]}" (should be userinfo)`);
+        console.log(`   Column 4: "${firstRow._rawData[4]}" (should be userinfo/หมายเหตุ)`);
         console.log(`   Column 5: "${firstRow._rawData[5]}" (should be เวลาออก)`);
         console.log(`   Column 6: "${firstRow._rawData[6]}" (should be พิกัดเข้า)`);
         console.log(`   Column 7: "${firstRow._rawData[7]}" (should be สถานที่เข้า)`);
         console.log(`   Column 8: "${firstRow._rawData[8]}" (should be พิกัดออก)`);
         console.log(`   Column 9: "${firstRow._rawData[9]}" (should be ที่อยู่ออก)`);
         console.log(`   Column 10: "${firstRow._rawData[10]}" (should be ชั่วโมงทำงาน)`);
-        console.log(`   Column 11: "${firstRow._rawData[11]}" (should be หมายเหตุ)`);
+        console.log(`   Column 11: "${firstRow._rawData[11]}" (should be หมายเหตุเดิม - ไม่ใช้แล้ว)`);
       }
       
       let filteredRows = [];
@@ -910,13 +910,13 @@ class GoogleSheetsService {
         const lineName = row._rawData[1] || '';        // column 1: Line name
         const clockIn = row._rawData[3] || '';         // column 3: เวลาเข้า
         const clockOut = row._rawData[5] || '';        // column 5: เวลาออก
-        const userInfo = row._rawData[4] || '';        // column 4: userinfo
+        const userInfo = row._rawData[4] || '';        // column 4: userinfo/หมายเหตุ (ใช้แทนหมายเหตุ)
         const location = row._rawData[6] || '';        // column 6: พิกัด
         const locationName = row._rawData[7] || '';    // column 7: สถานที่เข้า
         const locationOutCoords = row._rawData[8] || ''; // column 8: พิกัดออก
         const locationOut = row._rawData[9] || '';     // column 9: ที่อยู่ออก
         const workingHours = row._rawData[10] || '';   // column 10: ชั่วโมงทำงาน
-        const note = row._rawData[11] || '';           // column 11: หมายเหตุ
+        const note = row._rawData[4] || '';            // column 4: หมายเหตุ (เปลี่ยนจาก 11 เป็น 4)
         
         // Debug: แสดงข้อมูลแต่ละ row
         if (index < 3) {
@@ -1505,10 +1505,11 @@ class GoogleSheetsService {
       const autoClockOutTime = cutoffTime.format('YYYY-MM-DD HH:mm:ss');
       const hoursWorked = calculateWorkingHours(clockInTime, autoClockOutTime);
       
-      // ข้อความที่จะเขียนลง sheet
+      // ข้อความที่จะเขียนลง sheet (คอลัมน์ E)
       const missedCheckoutNote = 'ลืมลงเวลาออก (ระบบอัตโนมัติ)';
       
       console.log(`⏰ Auto clock out for ${employeeName}: ${autoClockOutTime} (${hoursWorked.toFixed(2)} hours)`);
+      console.log(`📝 Note will be written to column E: "${missedCheckoutNote}"`);
 
       // อัปเดต MAIN sheet
       if (mainRowIndex && !isNaN(parseInt(mainRowIndex))) {
@@ -1521,13 +1522,14 @@ class GoogleSheetsService {
         if (targetRowIndex >= 0 && targetRowIndex < mainRows.length) {
           const targetRow = mainRows[targetRowIndex];
           
-          // อัปเดตข้อมูลเวลาออกและหมายเหตุ
+          // อัปเดตข้อมูลเวลาออกและหมายเหตุ (ใช้คอลัมน์ E แทน)
           targetRow.set('เวลาออก', autoClockOutTime);
           targetRow.set('ชั่วโมงทำงาน', hoursWorked.toFixed(2));
-          targetRow.set('หมายเหตุ', missedCheckoutNote);
+          // เขียนหมายเหตุลงคอลัมน์ E (userinfo) แทนคอลัมน์หมายเหตุเดิม
+          targetRow._rawData[4] = missedCheckoutNote; // Column E (index 4)
           
           await targetRow.save();
-          console.log(`✅ Updated MAIN sheet row ${mainRowIndex} for ${employeeName}`);
+          console.log(`✅ Updated MAIN sheet row ${mainRowIndex} for ${employeeName} - Note written to column E`);
         } else {
           console.warn(`⚠️ Invalid main row index ${mainRowIndex} for ${employeeName}`);
         }
@@ -1604,8 +1606,9 @@ class GoogleSheetsService {
       }
       
       message += `⏰ เวลาประมวลผล: ${moment().tz(CONFIG.TIMEZONE).format('HH:mm:ss')}\n`;
-      message += `💡 พนักงานสามารถลงเวลาเข้างานวันใหม่ได้ปกติ`;
-      message += `🛡️ พนักงานยกเว้น: ${CONFIG.AUTO_CHECKOUT.EXEMPT_EMPLOYEES.join(', ')}`;
+      message += `💡 พนักงานสามารถลงเวลาเข้างานวันใหม่ได้ปกติ\n`;
+      message += `🛡️ พนักงานยกเว้น: ${CONFIG.AUTO_CHECKOUT.EXEMPT_EMPLOYEES.join(', ')}\n`;
+      message += `📝 หมายเหตุ "ลืมลงเวลาออก (ระบบอัตโนมัติ)" ถูกเขียนลงคอลัมน์ E ใน Google Sheet`;
 
       // ส่งข้อความไปยัง Telegram
       const telegramUrl = `https://api.telegram.org/bot${CONFIG.TELEGRAM.BOT_TOKEN}/sendMessage`;
@@ -1884,7 +1887,7 @@ class ExcelExportService {
           right: { style: 'thin' }
         };
 
-        // สีพื้นหลังสำหรับแถวต่างๆ
+        // สีพื้นหลังสำหรับแถวต่างๆ (ตรวจสอบหมายเหตุจากคอลัมน์ E)
         if (record.note && record.note.includes('ลืมลงเวลาออก')) {
           cell.fill = {
             type: 'pattern',
