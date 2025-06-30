@@ -17,6 +17,7 @@ const PORT = process.env.PORT || 3001;
 console.log(`🔧 Using PORT: ${PORT}`);
 
 // ========== Enhanced Configuration ==========
+
 const CONFIG = {
   GOOGLE_SHEETS: {
     SPREADSHEET_ID: process.env.GOOGLE_SPREADSHEET_ID,
@@ -39,7 +40,8 @@ const CONFIG = {
     SERVICE_URL: process.env.RENDER_SERVICE_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` || 'http://localhost:3001',
     KEEP_ALIVE_ENABLED: process.env.KEEP_ALIVE_ENABLED === 'true',
     GSA_WEBHOOK_SECRET: process.env.GSA_WEBHOOK_SECRET || 'your-secret-key'
-  },  ADMIN: {
+  },
+  ADMIN: {
     JWT_SECRET: process.env.JWT_SECRET || 'huana-nbp-jwt-secret-2025',
     JWT_EXPIRES_IN: '24h',
     // Admin users (in production, store in database)
@@ -59,6 +61,16 @@ const CONFIG = {
         role: 'admin'
       }
     ]
+  },
+  // 🆕 เพิ่มการตั้งค่าสำหรับยกเว้นการลงเวลาออกอัตโนมัติ
+  AUTO_CHECKOUT: {
+    // รายชื่อพนักงานที่ยกเว้นจากการลงเวลาออกอัตโนมัติ (เช่น ยามกลางคืน)
+    EXEMPT_EMPLOYEES: [
+      '1017-เปรมชัย ทองสงคราม' // พนักงานยามกลางคืน
+    ],
+    // เวลาที่ทำการลงเวลาออกอัตโนมัติ (23:59)
+    CUTOFF_HOUR: 23,
+    CUTOFF_MINUTE: 59
   },
   TIMEZONE: 'Asia/Bangkok'
 };
@@ -473,6 +485,36 @@ class GoogleSheetsService {
            normalizedInput.includes(normalizedCompare) ||
            normalizedCompare.includes(normalizedInput);
   }
+    /**
+   * ตรวจสอบว่าพนักงานคนนี้ได้รับการยกเว้นจากการลงเวลาออกอัตโนมัติหรือไม่
+   * @param {string} employeeName - ชื่อพนักงาน
+   * @returns {boolean} - true ถ้าได้รับการยกเว้น, false ถ้าไม่ได้
+   */
+  isEmployeeExempt(employeeName) {
+    if (!employeeName || !CONFIG.AUTO_CHECKOUT.EXEMPT_EMPLOYEES) {
+      return false;
+    }
+    
+    const normalizedInputName = this.normalizeEmployeeName(employeeName);
+    
+    // ตรวจสอบกับรายชื่อที่ยกเว้น
+    return CONFIG.AUTO_CHECKOUT.EXEMPT_EMPLOYEES.some(exemptName => {
+      const normalizedExemptName = this.normalizeEmployeeName(exemptName);
+      
+      // ตรวจสอบแบบหลายรูปแบบ
+      const isExactMatch = normalizedInputName === normalizedExemptName;
+      const isPartialMatch = normalizedInputName.includes(normalizedExemptName) || 
+                            normalizedExemptName.includes(normalizedInputName);
+      
+      if (isExactMatch || isPartialMatch) {
+        console.log(`🛡️ Employee exempt match found: "${employeeName}" ↔ "${exemptName}"`);
+        return true;
+      }
+      
+      return false;
+    });
+  }
+
   async getEmployees() {
     try {
       // ใช้ cached data แทนการเรียก API ใหม่
@@ -1319,6 +1361,7 @@ class GoogleSheetsService {
   }
 
   // ฟังก์ชันสำหรับตรวจสอบและจัดการกรณีลืมลงเวลาออก
+
   async checkAndHandleMissedCheckouts() {
     try {
       console.log('🔍 Starting automatic missed checkout check...');
@@ -1330,20 +1373,22 @@ class GoogleSheetsService {
         console.log('✅ No employees currently on work, no missed checkouts to handle');
         return { success: true, processedCount: 0, message: 'No employees on work' };
       }
-
+  
       console.log(`📊 Found ${onWorkRows.length} employees currently on work`);
       
       const today = moment().tz(CONFIG.TIMEZONE);
       const cutoffTime = today.clone().set({
-        hour: 23,
-        minute: 59,
+        hour: CONFIG.AUTO_CHECKOUT.CUTOFF_HOUR,
+        minute: CONFIG.AUTO_CHECKOUT.CUTOFF_MINUTE,
         second: 59,
         millisecond: 999
       });
       
       console.log(`⏰ Processing missed checkouts for cutoff time: ${cutoffTime.format('YYYY-MM-DD HH:mm:ss')}`);
+      console.log(`🛡️ Exempt employees: ${CONFIG.AUTO_CHECKOUT.EXEMPT_EMPLOYEES.join(', ')}`);
       
       let processedCount = 0;
+      let exemptedCount = 0;
       const results = [];
       
       // ประมวลผลแต่ละพนักงานที่ยังไม่ได้ลงเวลาออก
@@ -1357,7 +1402,21 @@ class GoogleSheetsService {
             console.warn(`⚠️ Missing data for work record: ${employeeName || 'Unknown'}`);
             continue;
           }
-
+  
+          // 🛡️ ตรวจสอบว่าเป็นพนักงานที่ยกเว้นหรือไม่
+          const isExempt = this.isEmployeeExempt(employeeName);
+          if (isExempt) {
+            console.log(`🛡️ EXEMPT: ${employeeName} - skipping auto checkout (night guard)`);
+            exemptedCount++;
+            results.push({
+              employee: employeeName,
+              action: 'exempted',
+              reason: 'Night guard - exempt from auto checkout',
+              clockIn: clockInTime
+            });
+            continue;
+          }
+  
           // ตรวจสอบว่าเวลาเข้าเป็นวันนี้หรือไม่
           const clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE);
           const isToday = clockInMoment.format('YYYY-MM-DD') === today.format('YYYY-MM-DD');
@@ -1366,11 +1425,11 @@ class GoogleSheetsService {
             console.log(`⏭️ Skipping ${employeeName} - not clocked in today (${clockInMoment.format('YYYY-MM-DD')})`);
             continue;
           }
-
+  
           console.log(`🔄 Processing missed checkout for: ${employeeName}`);
           console.log(`⏰ Clock in time: ${clockInTime}`);
           console.log(`📍 Main row index: ${mainRowIndex}`);
-
+  
           // อัปเดต MAIN sheet ด้วยข้อมูลลืมลงเวลาออก
           const result = await this.processMissedCheckout({
             employeeName,
@@ -1379,7 +1438,7 @@ class GoogleSheetsService {
             cutoffTime,
             workRow
           });
-
+  
           if (result.success) {
             processedCount++;
             results.push({
@@ -1398,7 +1457,7 @@ class GoogleSheetsService {
               error: result.error
             });
           }
-
+  
         } catch (error) {
           console.error(`❌ Error processing missed checkout for employee:`, error);
           results.push({
@@ -1408,28 +1467,33 @@ class GoogleSheetsService {
           });
         }
       }
-
-      console.log(`✅ Missed checkout check completed. Processed: ${processedCount}/${onWorkRows.length} employees`);
+  
+      console.log(`✅ Missed checkout check completed.`);
+      console.log(`   📊 Total checked: ${onWorkRows.length}`);
+      console.log(`   ✅ Processed: ${processedCount}`);
+      console.log(`   🛡️ Exempted: ${exemptedCount}`);
       
-      // ส่ง notification ถ้ามีการประมวลผล
-      if (processedCount > 0) {
-        await this.sendMissedCheckoutNotification(results, processedCount);
+      // ส่ง notification ถ้ามีการประมวลผลหรือการยกเว้น
+      if (processedCount > 0 || exemptedCount > 0) {
+        await this.sendMissedCheckoutNotification(results, processedCount, exemptedCount);
       }
-
+  
       return {
         success: true,
         processedCount,
+        exemptedCount,
         totalChecked: onWorkRows.length,
         results,
-        message: `Processed ${processedCount} missed checkouts`
+        message: `Processed ${processedCount} missed checkouts, exempted ${exemptedCount} employees`
       };
-
+  
     } catch (error) {
       console.error('❌ Error in checkAndHandleMissedCheckouts:', error);
       return {
         success: false,
         error: error.message,
-        processedCount: 0
+        processedCount: 0,
+        exemptedCount: 0
       };
     }
   }
@@ -1494,7 +1558,7 @@ class GoogleSheetsService {
   }
 
   // ฟังก์ชันส่ง notification เมื่อมีการประมวลผลลืมลงเวลาออก
-  async sendMissedCheckoutNotification(results, processedCount) {
+  async sendMissedCheckoutNotification(results, processedCount, exemptedCount = 0) {
     try {
       if (!CONFIG.TELEGRAM.BOT_TOKEN || !CONFIG.TELEGRAM.CHAT_ID) {
         console.log('⚠️ Telegram notification not configured for missed checkout alerts');
@@ -1502,13 +1566,26 @@ class GoogleSheetsService {
       }
 
       const successfulResults = results.filter(r => r.action === 'missed_checkout_processed');
+      const exemptedResults = results.filter(r => r.action === 'exempted');
       const failedResults = results.filter(r => r.action === 'failed' || r.action === 'error');
       
       const today = moment().tz(CONFIG.TIMEZONE).format('DD/MM/YYYY');
       
-      let message = `🤖 *รายงานลืมลงเวลาออก - ${today}*\n\n`;
-      message += `📊 ประมวลผลเสร็จแล้ว: ${processedCount} คน\n\n`;
+      let message = `🤖 *รายงานลงเวลาออกอัตโนมัติ - ${today}*\n\n`;
+      message += `📊 สรุปผล:\n`;
+      message += `   ✅ ลงเวลาออกอัตโนมัติ: ${processedCount} คน\n`;
+      message += `   🛡️ ยกเว้น (ยามกลางคืน): ${exemptedCount} คน\n`;
+      message += `   ❌ ไม่สำเร็จ: ${failedResults.length} คน\n\n`;
       
+      if (exemptedResults.length > 0) {
+        message += `🛡️ *พนักงานที่ได้รับการยกเว้น:*\n`;
+        exemptedResults.forEach(result => {
+          const clockInTime = moment(result.clockIn).tz(CONFIG.TIMEZONE).format('HH:mm');
+          message += `• ${result.employee} - เข้างาน ${clockInTime} (ยามกลางคืน)\n`;
+        });
+        message += '\n';
+      }
+
       if (successfulResults.length > 0) {
         message += `✅ *ดำเนินการสำเร็จ:*\n`;
         successfulResults.forEach(result => {
@@ -1528,6 +1605,7 @@ class GoogleSheetsService {
       
       message += `⏰ เวลาประมวลผล: ${moment().tz(CONFIG.TIMEZONE).format('HH:mm:ss')}\n`;
       message += `💡 พนักงานสามารถลงเวลาเข้างานวันใหม่ได้ปกติ`;
+      message += `🛡️ พนักงานยกเว้น: ${CONFIG.AUTO_CHECKOUT.EXEMPT_EMPLOYEES.join(', ')}`;
 
       // ส่งข้อความไปยัง Telegram
       const telegramUrl = `https://api.telegram.org/bot${CONFIG.TELEGRAM.BOT_TOKEN}/sendMessage`;
