@@ -70,7 +70,9 @@ const CONFIG = {
     ],
     // เวลาที่ทำการลงเวลาออกอัตโนมัติ (23:59)
     CUTOFF_HOUR: 23,
-    CUTOFF_MINUTE: 59
+    CUTOFF_MINUTE: 59,
+    // เวลาเริ่มต้นกะกลางคืน (18:00)
+    NIGHT_SHIFT_START_HOUR: 18
   },
   TIMEZONE: 'Asia/Bangkok'
 };
@@ -156,8 +158,14 @@ function validateConfig() {
 
 // ========== Middleware ==========
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ charset: 'utf-8' }));
+app.use(express.urlencoded({ extended: true, charset: 'utf-8' }));
+
+// Set response encoding for Thai characters
+app.use((req, res, next) => {
+  res.set('Content-Type', 'application/json; charset=utf-8');
+  next();
+});
 
 // Security middleware สำหรับ webhook
 app.use('/api/webhook', (req, res, next) => {
@@ -1417,13 +1425,21 @@ class GoogleSheetsService {
             continue;
           }
   
-          // ตรวจสอบว่าเวลาเข้าเป็นวันนี้หรือไม่
+          // ตรวจสอบว่าเวลาเข้าเป็นวันนี้หรือไม่ (รองรับกะกลางคืน)
           const clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE);
           const isToday = clockInMoment.format('YYYY-MM-DD') === today.format('YYYY-MM-DD');
           
-          if (!isToday) {
-            console.log(`⏭️ Skipping ${employeeName} - not clocked in today (${clockInMoment.format('YYYY-MM-DD')})`);
+          // ตรวจสอบกรณีกะกลางคืน (เข้างานเมื่อวานแต่ยังไม่ออก)
+          const isYesterday = clockInMoment.format('YYYY-MM-DD') === today.clone().subtract(1, 'day').format('YYYY-MM-DD');
+          const isNightShift = isYesterday && clockInMoment.hour() >= CONFIG.AUTO_CHECKOUT.NIGHT_SHIFT_START_HOUR; // เข้างานตั้งแต่เวลาที่กำหนด
+          
+          if (!isToday && !isNightShift) {
+            console.log(`⏭️ Skipping ${employeeName} - not clocked in today or valid night shift (${clockInMoment.format('YYYY-MM-DD HH:mm')})`);
             continue;
+          }
+          
+          if (isNightShift) {
+            console.log(`🌙 Night shift detected: ${employeeName} - clocked in at ${clockInMoment.format('YYYY-MM-DD HH:mm')}`);
           }
   
           console.log(`🔄 Processing missed checkout for: ${employeeName}`);
@@ -2326,6 +2342,34 @@ app.post('/api/clockin', async (req, res) => {
       });
     }
 
+    // ✨ ตรวจสอบเวลาเข้างาน - ห้ามเกิน 16:30 และจำลองกะกลางคืน
+    let adjustedMockTime = mock_time;
+    const currentTime = moment().tz(CONFIG.TIMEZONE);
+    
+    // สร้าง instance ชั่วคราวเพื่อเรียกใช้ฟังก์ชัน isEmployeeExempt
+    const tempService = new GoogleSheetsService();
+    const isExemptEmployee = tempService.isEmployeeExempt(employee);
+    
+    // ถ้าเป็นพนักงานยกเว้น (กะกลางคืน) และไม่มี mock_time
+    if (isExemptEmployee && !mock_time) {
+      // จำลองเวลาเข้างานเมื่อวานหลัง 18:00 เพื่อให้ชั่วโมงการทำงานถูกต้อง
+      const yesterday = currentTime.clone().subtract(1, 'day').set({
+        hour: CONFIG.AUTO_CHECKOUT.NIGHT_SHIFT_START_HOUR + 1, // 19:00
+        minute: 0,
+        second: 0
+      });
+      adjustedMockTime = yesterday.format('YYYY-MM-DD HH:mm:ss');
+      console.log(`🌙 Night shift adjustment for ${employee}: ${adjustedMockTime}`);
+    }
+    // ถ้าไม่ใช่พนักงานยกเว้นและไม่มี mock_time ตรวจสอบเวลาปัจจุบัน
+    else if (!isExemptEmployee && !mock_time && (currentTime.hour() > 16 || (currentTime.hour() === 16 && currentTime.minute() > 30))) {
+      return res.status(400).json({
+        success: false,
+        error: 'ไม่สามารถลงเวลาเข้างานหลัง 16:30 น. ได้',
+        currentTime: currentTime.format('HH:mm')
+      });
+    }
+
     // ตรวจสอบ rate limit
     if (!apiMonitor.canMakeAPICall()) {
       return res.status(429).json({
@@ -2336,7 +2380,7 @@ app.post('/api/clockin', async (req, res) => {
 
     apiMonitor.logAPICall('clockIn');
     const result = await sheetsService.clockIn({
-      employee, userinfo, lat, lon, line_name, line_picture, mock_time
+      employee, userinfo, lat, lon, line_name, line_picture, mock_time: adjustedMockTime
     });
     
     // ลด burst counter หลังจาก API call เสร็จ
