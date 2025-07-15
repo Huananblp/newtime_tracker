@@ -631,8 +631,7 @@ class GoogleSheetsService {
         this.safeGetCachedSheetData(CONFIG.SHEETS.MAIN)
       ]);
 
-      const totalEmployees = employees.length;
-      const workingNow = onWorkRows.length;// หาจำนวนคนที่มาทำงานวันนี้ (ใช้ข้อมูลจาก ON_WORK sheet ที่มีวันที่วันนี้)
+      const totalEmployees = employees.length;// หาจำนวนคนที่มาทำงานวันนี้ (ใช้ข้อมูลจาก ON_WORK sheet ที่มีวันที่วันนี้)
       const today = moment().tz(CONFIG.TIMEZONE).format('YYYY-MM-DD');
       console.log(`📅 Today date for comparison: ${today}`);
       console.log(`📊 Total MAIN sheet records: ${mainRows.length}`);
@@ -680,6 +679,8 @@ class GoogleSheetsService {
       
       console.log(`📊 Present today count: ${presentToday} out of ${onWorkRows.length} ON_WORK records`);
 
+      // workingNow ควรเป็นจำนวนคนที่มาทำงานวันนี้ (เดียวกับ presentToday)
+      const workingNow = presentToday;
       const absentToday = totalEmployees - presentToday;      // รายชื่อพนักงานที่กำลังทำงาน
       const workingEmployees = onWorkRows.map(row => {
         const clockInTime = row.get('เวลาเข้า');
@@ -1540,10 +1541,10 @@ class GoogleSheetsService {
       console.log(`   ✅ Processed: ${processedCount}`);
       console.log(`   🛡️ Exempted: ${exemptedCount}`);
       
-      // ส่ง notification ถ้ามีการประมวลผลหรือการยกเว้น
-      if (processedCount > 0 || exemptedCount > 0) {
-        await this.sendMissedCheckoutNotification(results, processedCount, exemptedCount);
-      }
+      // ส่ง notification ถ้ามีการประมวลผลหรือการยกเว้น (ปิดการแจ้งเตือน - แอดมินดูจากแดชบอร์ดเท่านั้น)
+      // if (processedCount > 0 || exemptedCount > 0) {
+      //   await this.sendMissedCheckoutNotification(results, processedCount, exemptedCount);
+      // }
   
       return {
         success: true,
