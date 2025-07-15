@@ -10,15 +10,8 @@ const jwt = require('jsonwebtoken');
 const ExcelJS = require('exceljs');
 const moment = require('moment-timezone');
 const fetch = require('node-fetch');
-
-// Clear config cache to ensure fresh reload
-const configPath = path.join(__dirname, 'config', 'index.js');
-delete require.cache[configPath];
 const { CONFIG, validateConfig } = require('./config');
 const ExcelExportService = require('./services/excelExport');
-
-console.log('🔧 CONFIG imported:', JSON.stringify(CONFIG.SHEETS, null, 2));
-console.log('🔧 TELEGRAM_SETTINGS:', CONFIG.SHEETS.TELEGRAM_SETTINGS);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -276,10 +269,10 @@ class GoogleSheetsService {
     this.isInitialized = false;
     // เพิ่มระบบ caching เพื่อลดการเรียก API
     this.cache = {
-      employees: { data: null, timestamp: null, ttl: 600000 }, // 10 นาที (เพิ่มจาก 5)
-      onWork: { data: null, timestamp: null, ttl: 30000 }, // 30 วินาที (ลดจาก 1 นาที)  
-      main: { data: null, timestamp: null, ttl: 60000 }, // 1 นาที (เพิ่มจาก 30 วินาที)
-      stats: { data: null, timestamp: null, ttl: 300000 } // 5 นาที (เพิ่มจาก 2 นาที)
+      employees: { data: null, timestamp: null, ttl: 300000 }, // 5 นาที
+      onWork: { data: null, timestamp: null, ttl: 60000 }, // 1 นาที  
+      main: { data: null, timestamp: null, ttl: 30000 }, // 30 วินาที
+      stats: { data: null, timestamp: null, ttl: 120000 } // 2 นาที
     };
     this.emergencyMode = false; // เริ่มต้นปิดระบบ emergency mode
   }
@@ -978,7 +971,7 @@ class GoogleSheetsService {
 
       console.log(`✅ Clock In successful: ${employee} at ${this.formatTime(timestamp)}, Main row: ${mainRowIndex}`);
 
-      // ทำการ warm cache อัตโนมัติ (ลดเวลารอจาก 2000ms เป็น 500ms)
+      // ทำการ warm cache อัตโนมัติ
       setTimeout(async () => {
         try {
           await this.getCachedSheetData(CONFIG.SHEETS.ON_WORK);
@@ -986,27 +979,11 @@ class GoogleSheetsService {
         } catch (error) {
           console.error('⚠️ Auto cache warming error:', error);
         }
-      }, 500);
+      }, 2000);
 
       this.triggerMapGeneration('clockin', {
         employee, lat, lon, line_name, userinfo, timestamp
       });
-
-      // 🆕 ส่งการแจ้งเตือนลงเวลาเข้างาน (ปิดใช้งาน - ให้ GSA ส่งแทน)
-      /*
-      try {
-        const clockInMessage = `⏰ *ลงเวลาเข้างาน*\n\n` +
-          `👤 พนักงาน: ${employee}\n` +
-          `🕐 เวลา: ${this.formatTime(timestamp)}\n` +
-          `📍 สถานที่: ${locationName}\n` +
-          `📝 หมายเหตุ: ${userinfo || 'ไม่มี'}\n` +
-          `📊 แถวใน Sheet: ${mainRowIndex}`;
-        
-        await this.sendTelegramNotification('clock_in_out', clockInMessage);
-      } catch (notificationError) {
-        console.error('⚠️ Clock-in notification error (non-critical):', notificationError);
-      }
-      */
 
       return {
         success: true,
@@ -1238,7 +1215,7 @@ class GoogleSheetsService {
         this.clearCache('main');
         this.clearCache('stats');
         
-        // ทำการ warm cache อัตโนมัติ (ลดเวลารอจาก 2000ms เป็น 500ms)
+        // ทำการ warm cache อัตโนมัติ
         setTimeout(async () => {
           try {
             await this.getCachedSheetData(CONFIG.SHEETS.ON_WORK);
@@ -1246,7 +1223,7 @@ class GoogleSheetsService {
           } catch (error) {
             console.error('⚠️ Auto cache warming error:', error);
           }
-        }, 500);
+        }, 2000);
         
       } catch (deleteError) {
         console.error('❌ Error deleting from ON_WORK:', deleteError);
@@ -1261,21 +1238,6 @@ class GoogleSheetsService {
       } catch (webhookError) {
         console.error('⚠️ Webhook error (non-critical):', webhookError);
       }
-
-      // 🆕 ส่งการแจ้งเตือนลงเวลาออกงาน (ปิดใช้งาน - ให้ GSA ส่งแทน)
-      /*
-      try {
-        const clockOutMessage = `🏠 *ลงเวลาออกงาน*\n\n` +
-          `👤 พนักงาน: ${employee}\n` +
-          `🕐 เวลาออก: ${this.formatTime(timestamp)}\n` +
-          `⏰ ชั่วโมงทำงาน: ${hoursWorked.toFixed(2)} ชม.\n` +
-          `📍 สถานที่: ${locationName}`;
-        
-        await this.sendTelegramNotification('clock_in_out', clockOutMessage);
-      } catch (notificationError) {
-        console.error('⚠️ Clock-out notification error (non-critical):', notificationError);
-      }
-      */
 
       return {
         success: true,
@@ -1604,11 +1566,7 @@ class GoogleSheetsService {
   // ฟังก์ชันส่ง notification เมื่อมีการประมวลผลลืมลงเวลาออก
   async sendMissedCheckoutNotification(results, processedCount, exemptedCount = 0) {
     try {
-      // ใช้ฟังก์ชันใหม่ที่เร็วกว่า (ไม่ต้องโหลดจาก Google Sheets)
-      const hasCredentials = CONFIG.TELEGRAM.SYSTEM_ALERT.ENABLED ||
-                           (CONFIG.TELEGRAM.BOT_TOKEN && CONFIG.TELEGRAM.CHAT_ID);
-      
-      if (!hasCredentials) {
+      if (!CONFIG.TELEGRAM.BOT_TOKEN || !CONFIG.TELEGRAM.CHAT_ID) {
         console.log('⚠️ Telegram notification not configured for missed checkout alerts');
         return;
       }
@@ -1656,14 +1614,22 @@ class GoogleSheetsService {
       message += `🛡️ พนักงานยกเว้น: ${CONFIG.AUTO_CHECKOUT.EXEMPT_EMPLOYEES.join(', ')}\n`;
       message += `📝 หมายเหตุ "ลืมลงเวลาออก (ระบบอัตโนมัติ)" ถูกเขียนลงคอลัมน์ E ใน Google Sheet`;
 
-      // 🚀 ใช้ฟังก์ชันใหม่ที่เร็วกว่า
-      const success = await this.sendTelegramNotification('system_alert', message);
+      // ส่งข้อความไปยัง Telegram
+      const telegramUrl = `https://api.telegram.org/bot${CONFIG.TELEGRAM.BOT_TOKEN}/sendMessage`;
       
-      if (success) {
-        console.log('✅ [FAST] Missed checkout notification sent to Telegram');
-      } else {
-        console.log('❌ [FAST] Failed to send missed checkout notification');
-      }
+      await fetch(telegramUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chat_id: CONFIG.TELEGRAM.CHAT_ID,
+          text: message,
+          parse_mode: 'Markdown'
+        })
+      });
+
+      console.log('✅ Missed checkout notification sent to Telegram');
 
     } catch (error) {
       console.error('❌ Error sending missed checkout notification:', error);
@@ -1681,11 +1647,11 @@ class GoogleSheetsService {
       });
     } else {
       console.log('✅ Emergency mode DISABLED - Normal operation resumed');
-      // คืนค่า TTL เดิม (ปรับปรุงให้เหมาะสม)
-      this.cache.employees.ttl = 600000; // 10 minutes (เพิ่มจาก 5)
-      this.cache.onwork.ttl = 30000;     // 30 seconds (ลดจาก 1 minute)
-      this.cache.main.ttl = 60000;       // 1 minute (เพิ่มจาก 30 seconds)
-      this.cache.stats.ttl = 300000;     // 5 minutes (เพิ่มจาก 2 minutes)
+      // คืนค่า TTL เดิม
+      this.cache.employees.ttl = 300000; // 5 minutes
+      this.cache.onwork.ttl = 60000;     // 1 minute
+      this.cache.main.ttl = 30000;       // 30 seconds
+      this.cache.stats.ttl = 120000;     // 2 minutes
     }
   }
 
@@ -1710,91 +1676,6 @@ class GoogleSheetsService {
       // ถ้าไม่มี cache เลย คืนค่า array ว่าง
       console.warn(`⚠️ No cache available for ${sheetName}, returning empty data`);
       return [];
-    }
-  }
-
-  // ========== Telegram Functions (Fast Mode - Using CONFIG.TELEGRAM) ==========
-
-  /**
-   * 🆕 ส่งการแจ้งเตือนผ่าน Telegram โดยใช้ CONFIG.TELEGRAM (แบบเร็ว)
-   * @param {string} notificationType - ประเภทการแจ้งเตือน ('clock_in_out', 'forgot_clock', 'system_alert')
-   * @param {string} message - ข้อความที่จะส่ง
-   * @returns {Promise<boolean>} - สถานะการส่งข้อความ
-   */
-  async sendTelegramNotification(notificationType, message) {
-    try {
-      console.log(`📨 [FAST] Sending ${notificationType} notification: "${message.substring(0, 50)}..."`);
-      
-      // เลือก config ตาม notification type
-      let telegramConfig;
-      
-      switch (notificationType) {
-        case 'clock_in_out':
-          // ใช้ config หลักสำหรับการแจ้งเตือนเข้า-ออก
-          telegramConfig = {
-            ENABLED: !!(CONFIG.TELEGRAM.BOT_TOKEN && CONFIG.TELEGRAM.CHAT_ID),
-            BOT_TOKEN: CONFIG.TELEGRAM.BOT_TOKEN,
-            CHAT_ID: CONFIG.TELEGRAM.CHAT_ID
-          };
-          break;
-        case 'forgot_clock':
-        case 'system_alert':
-          telegramConfig = CONFIG.TELEGRAM.SYSTEM_ALERT;
-          break;
-        default:
-          // fallback ไปใช้ config หลัก
-          telegramConfig = {
-            ENABLED: !!(CONFIG.TELEGRAM.BOT_TOKEN && CONFIG.TELEGRAM.CHAT_ID),
-            BOT_TOKEN: CONFIG.TELEGRAM.BOT_TOKEN,
-            CHAT_ID: CONFIG.TELEGRAM.CHAT_ID
-          };
-      }
-
-      // ตรวจสอบการตั้งค่า
-      if (!telegramConfig.ENABLED) {
-        console.log(`⚠️ Telegram notification disabled for: ${notificationType}`);
-        return false;
-      }
-
-      if (!telegramConfig.BOT_TOKEN || !telegramConfig.CHAT_ID) {
-        console.log(`⚠️ Telegram credentials not configured for: ${notificationType}`);
-        return false;
-      }
-
-      console.log(`🔧 [FAST] Using ${notificationType} config:`, {
-        enabled: telegramConfig.ENABLED,
-        hasToken: !!telegramConfig.BOT_TOKEN,
-        hasChatId: !!telegramConfig.CHAT_ID
-      });
-
-      // ส่งข้อความ
-      const url = `https://api.telegram.org/bot${telegramConfig.BOT_TOKEN}/sendMessage`;
-      const payload = {
-        chat_id: telegramConfig.CHAT_ID,
-        text: message,
-        parse_mode: 'Markdown'
-      };
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json();
-      
-      if (result.ok) {
-        console.log(`✅ [FAST] ${notificationType} notification sent successfully`);
-        return true;
-      } else {
-        console.error(`❌ [FAST] ${notificationType} notification failed:`, result);
-        return false;
-      }
-    } catch (error) {
-      console.error(`❌ [FAST] Error sending ${notificationType} notification:`, error);
-      return false;
     }
   }
 }
@@ -1979,199 +1860,6 @@ app.get('/api/admin/stats', authenticateAdmin, async (req, res) => {
   }
 });
 
-// ========== Telegram Settings API Routes (DISABLED for performance) ==========
-/*
-// Get all telegram settings
-app.get('/api/admin/telegram-settings', authenticateAdmin, async (req, res) => {
-  try {
-    const settings = await sheetsService.getTelegramSettings();
-    res.json({
-      success: true,
-      data: settings
-    });
-  } catch (error) {
-    console.error('Get telegram settings error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get telegram settings'
-    });
-  }
-});
-
-// Get telegram setting by type
-app.get('/api/admin/telegram-settings/:type', authenticateAdmin, async (req, res) => {
-  try {
-    const { type } = req.params;
-    const setting = await sheetsService.getTelegramSettingByType(type);
-    
-    if (!setting) {
-      return res.status(404).json({
-        success: false,
-        error: `Telegram setting not found for type: ${type}`
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: setting
-    });
-  } catch (error) {
-    console.error('Get telegram setting by type error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get telegram setting'
-    });
-  }
-});
-
-// Update telegram setting
-app.put('/api/admin/telegram-settings/:id', authenticateAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
-    
-    // Validate required fields
-    if (!updateData || Object.keys(updateData).length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Update data is required'
-      });
-    }
-    
-    // Validate specific fields if provided
-    if (updateData.notificationType && !['clock_in_out', 'forgot_clock'].includes(updateData.notificationType)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid notification type. Must be "clock_in_out" or "forgot_clock"'
-      });
-    }
-    
-    const success = await sheetsService.updateTelegramSetting(id, updateData);
-    
-    if (!success) {
-      return res.status(404).json({
-        success: false,
-        error: `Telegram setting not found with ID: ${id}`
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Telegram setting updated successfully'
-    });
-  } catch (error) {
-    console.error('Update telegram setting error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update telegram setting'
-    });
-  }
-});
-
-// Test telegram notification
-app.post('/api/admin/telegram-settings/test', authenticateAdmin, async (req, res) => {
-  try {
-    const { botToken, chatId, testMessage } = req.body;
-    
-    if (!botToken || !chatId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bot token and chat ID are required'
-      });
-    }
-    
-    const success = await sheetsService.testTelegramNotification(botToken, chatId, testMessage);
-    
-    if (success) {
-      res.json({
-        success: true,
-        message: 'Test notification sent successfully'
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: 'Failed to send test notification'
-      });
-    }
-  } catch (error) {
-    console.error('Test telegram notification error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to test telegram notification'
-    });
-  }
-});
-
-// Send notification with dynamic config
-app.post('/api/admin/telegram-settings/send-notification', authenticateAdmin, async (req, res) => {
-  try {
-    const { notificationType, message } = req.body;
-    
-    console.log('📞 Send notification request:', { notificationType, message });
-    
-    if (!notificationType || !message) {
-      return res.status(400).json({
-        success: false,
-        error: 'Notification type and message are required'
-      });
-    }
-    
-    // ตรวจสอบว่ามีการตั้งค่า Telegram หรือไม่
-    try {
-      const setting = await sheetsService.getTelegramSettingByType(notificationType);
-      console.log('📋 Found setting:', setting);
-      
-      if (!setting) {
-        return res.status(400).json({
-          success: false,
-          error: `No Telegram setting found for type: ${notificationType}. Please configure it first.`
-        });
-      }
-      
-      if (!setting.enabled) {
-        return res.status(400).json({
-          success: false,
-          error: `Telegram notification is disabled for type: ${notificationType}. Please enable it first.`
-        });
-      }
-      
-      if (!setting.botToken || !setting.chatId) {
-        return res.status(400).json({
-          success: false,
-          error: `Missing Bot Token or Chat ID for type: ${notificationType}. Please configure them first.`
-        });
-      }
-      
-    } catch (settingError) {
-      console.error('Error checking settings:', settingError);
-      return res.status(500).json({
-        success: false,
-        error: 'Error accessing Telegram settings. Please check your Google Sheets configuration.'
-      });
-    }
-    
-    const success = await sheetsService.sendNotificationWithDynamicConfig(notificationType, message);
-    
-    if (success) {
-      res.json({
-        success: true,
-        message: 'Notification sent successfully'
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: 'Failed to send notification. Please check your Telegram settings (Bot Token, Chat ID) and try again.'
-      });
-    }
-  } catch (error) {
-    console.error('Send notification error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to send notification'
-    });
-  }
-});
-
 // Export Routes
 app.get('/api/admin/export/:type', authenticateAdmin, async (req, res) => {
   try {
@@ -2221,7 +1909,6 @@ app.get('/api/admin/export/:type', authenticateAdmin, async (req, res) => {
     });
   }
 });
-*/
 
 // ========== API Rate Limiting และ Monitoring ==========
 class APIMonitor {
@@ -2695,27 +2382,6 @@ async function startServer() {
     console.log('📊 Initializing Google Sheets Service...');
     await sheetsService.initialize();
     console.log('✅ Google Sheets Service initialized successfully');
-    
-    // 🚀 ปิดการโหลด Telegram Settings เพื่อความเร็ว (ใช้ CONFIG.TELEGRAM แทน)
-    console.log('📱 Using CONFIG.TELEGRAM for fast notifications (Google Sheets disabled)');
-    console.log('🔧 Available notification types:', {
-      primaryTelegram: !!(CONFIG.TELEGRAM.BOT_TOKEN && CONFIG.TELEGRAM.CHAT_ID),
-      systemAlert: CONFIG.TELEGRAM.SYSTEM_ALERT.ENABLED
-    });
-
-    // Preload critical cache หลังจาก server start (background loading)
-    setTimeout(async () => {
-      try {
-        console.log('🚀 Preloading critical cache...');
-        await Promise.all([
-          sheetsService.getCachedSheetData(CONFIG.SHEETS.EMPLOYEES),
-          sheetsService.getCachedSheetData(CONFIG.SHEETS.ON_WORK)
-        ]);
-        console.log('✅ Critical cache preloaded successfully');
-      } catch (error) {
-        console.error('⚠️ Cache preloading failed (non-critical):', error);
-      }
-    }, 1000);
     
     // เริ่มต้น Keep-Alive Service
     if (CONFIG.RENDER.KEEP_ALIVE_ENABLED) {
