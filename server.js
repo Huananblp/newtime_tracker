@@ -32,11 +32,47 @@ function calculateWorkingHours(clockInTime, clockOutTime = null) {
   }
 
   try {
-    // ใช้ logic เดียวกันกับ admin stats
-    const clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE);
-    const endTimeMoment = clockOutTime ? 
-      moment.tz(clockOutTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE) :
-      moment().tz(CONFIG.TIMEZONE);
+    // 🔧 แก้ไข: รองรับทั้ง DD/MM/YYYY และ YYYY-MM-DD format
+    let clockInMoment;
+    
+    // ตรวจสอบ format ของ clockInTime
+    if (typeof clockInTime === 'string') {
+      if (clockInTime.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+        // รูปแบบ DD/MM/YYYY HH:mm:ss
+        clockInMoment = moment.tz(clockInTime, 'DD/MM/YYYY HH:mm:ss', CONFIG.TIMEZONE);
+      } else if (clockInTime.match(/^\d{4}-\d{2}-\d{2}/)) {
+        // รูปแบบ YYYY-MM-DD HH:mm:ss
+        clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD HH:mm:ss', CONFIG.TIMEZONE);
+      } else {
+        // ลองใช้ auto parse
+        clockInMoment = moment.tz(clockInTime, CONFIG.TIMEZONE);
+      }
+    } else {
+      // ถ้าเป็น Date object หรือ timestamp
+      clockInMoment = moment.tz(clockInTime, CONFIG.TIMEZONE);
+    }
+
+    // ทำเช่นเดียวกันกับ clockOutTime
+    let endTimeMoment;
+    if (clockOutTime) {
+      if (typeof clockOutTime === 'string') {
+        if (clockOutTime.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+          // รูปแบบ DD/MM/YYYY HH:mm:ss
+          endTimeMoment = moment.tz(clockOutTime, 'DD/MM/YYYY HH:mm:ss', CONFIG.TIMEZONE);
+        } else if (clockOutTime.match(/^\d{4}-\d{2}-\d{2}/)) {
+          // รูปแบบ YYYY-MM-DD HH:mm:ss
+          endTimeMoment = moment.tz(clockOutTime, 'YYYY-MM-DD HH:mm:ss', CONFIG.TIMEZONE);
+        } else {
+          // ลองใช้ auto parse
+          endTimeMoment = moment.tz(clockOutTime, CONFIG.TIMEZONE);
+        }
+      } else {
+        // ถ้าเป็น Date object หรือ timestamp
+        endTimeMoment = moment.tz(clockOutTime, CONFIG.TIMEZONE);
+      }
+    } else {
+      endTimeMoment = moment().tz(CONFIG.TIMEZONE);
+    }
 
     if (!clockInMoment.isValid()) {
       console.error(`❌ Invalid clockInTime format: "${clockInTime}"`);
@@ -53,9 +89,13 @@ function calculateWorkingHours(clockInTime, clockOutTime = null) {
 
     // Debug: แสดงการคำนวณ
     console.log(`⏰ Working hours calculation:`, {
+      clockInOriginal: clockInTime,
+      clockOutOriginal: clockOutTime || 'current time',
       clockIn: clockInMoment.format('YYYY-MM-DD HH:mm:ss'),
       endTime: endTimeMoment.format('YYYY-MM-DD HH:mm:ss'),
-      diffHours: hours.toFixed(2)
+      diffHours: hours.toFixed(2),
+      clockInValid: clockInMoment.isValid(),
+      endTimeValid: endTimeMoment.isValid()
     });
 
     // ตรวจสอบให้แน่ใจว่าไม่เป็นลบ (ป้องกันปัญหา timezone)
@@ -70,6 +110,35 @@ function calculateWorkingHours(clockInTime, clockOutTime = null) {
     return 0;
   }
 }
+
+/**
+ * 🔧 ฟังก์ชัน helper สำหรับ parse วันที่ในรูปแบบต่างๆ
+ * @param {string} dateTimeString - วันที่เวลาในรูปแบบ string
+ * @returns {moment.Moment} - moment object
+ */
+function parseDateTime(dateTimeString) {
+  if (!dateTimeString) {
+    return moment().tz(CONFIG.TIMEZONE);
+  }
+
+  // ตรวจสอบ format ของ dateTimeString
+  if (typeof dateTimeString === 'string') {
+    if (dateTimeString.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+      // รูปแบบ DD/MM/YYYY HH:mm:ss
+      return moment.tz(dateTimeString, 'DD/MM/YYYY HH:mm:ss', CONFIG.TIMEZONE);
+    } else if (dateTimeString.match(/^\d{4}-\d{2}-\d{2}/)) {
+      // รูปแบบ YYYY-MM-DD HH:mm:ss
+      return moment.tz(dateTimeString, 'YYYY-MM-DD HH:mm:ss', CONFIG.TIMEZONE);
+    } else {
+      // ลองใช้ auto parse
+      return moment.tz(dateTimeString, CONFIG.TIMEZONE);
+    }
+  } else {
+    // ถ้าเป็น Date object หรือ timestamp
+    return moment.tz(dateTimeString, CONFIG.TIMEZONE);
+  }
+}
+
 // สร้าง hash password (ใช้ในการตั้งรหัสผ่านครั้งแรก)
 async function createPassword(plainPassword) {
   return await bcrypt.hash(plainPassword, 10);
@@ -455,6 +524,24 @@ class GoogleSheetsService {
     });
   }
 
+  // 🔧 เพิ่มฟังก์ชัน helper สำหรับ parse และ format วันที่
+  parseDateTime(dateTimeString) {
+    return parseDateTime(dateTimeString);
+  }
+
+  parseAndFormatTime(dateTimeString, format = 'HH:mm:ss') {
+    try {
+      const parsed = this.parseDateTime(dateTimeString);
+      if (parsed.isValid()) {
+        return parsed.format(format);
+      }
+      return dateTimeString?.toString() || '';
+    } catch (error) {
+      console.error('Error parsing and formatting time:', error);
+      return dateTimeString?.toString() || '';
+    }
+  }
+
   async getEmployees() {
     try {
       // ใช้ cached data แทนการเรียก API ใหม่
@@ -611,7 +698,7 @@ class GoogleSheetsService {
 
         return {
           name: row.get('ชื่อพนักงาน') || row.get('ชื่อในระบบ'),
-          clockIn: clockInTime ? moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE).format('HH:mm') : '',
+          clockIn: clockInTime ? this.parseAndFormatTime(clockInTime, 'HH:mm') : '',
           workingHours
         };
       });      const stats = {
@@ -1398,7 +1485,7 @@ class GoogleSheetsService {
           }
   
           // ตรวจสอบว่าเวลาเข้าเป็นวันนี้หรือไม่
-          const clockInMoment = moment.tz(clockInTime, 'YYYY-MM-DD H:mm:ss', CONFIG.TIMEZONE);
+          const clockInMoment = this.parseDateTime(clockInTime);
           const isToday = clockInMoment.format('YYYY-MM-DD') === today.format('YYYY-MM-DD');
           
           if (!isToday) {
